@@ -80,7 +80,8 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         r_u_v_c_alpha_sym_0 = []
         r_u_v_c_alpha_sym_1 = []
         l = pucch_format0_param["startSymbolIndex"]
-        #Generate Cyclic shift for symbol 0
+
+        # Generate Cyclic shift for symbol 0
         m_o = pucch_format0_param["initialCyclicShift"]
         m_cs = 0
 
@@ -130,14 +131,15 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
 
         return nGrid
 
-    def pucch_format_0_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format0_param):
+    def pucch_format_0_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format0_param, noise_power):
 
         r_u_v_c_alpha_sym_0 = []
         r_u_v_c_alpha_sym_1 = []
 
         l = pucch_format0_param["startSymbolIndex"]
 
-        #Generate Cyclic shift for symbol 0
+        # Generate Cyclic shift for symbol 0
+
         m_o = pucch_format0_param["initialCyclicShift"]
 
         if pucch_format0_param["nrOfSymbols"] == 1:
@@ -162,18 +164,20 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         startPRB = pucch_format0_param["startPRB"]
 
         rec_symbol = []
-
         if pucch_format0_param["nrOfSymbols"] == 1:
 
             # Get PUCCH format 0 Symbol and derotate with reference symbol
             for n in range(0, 12, 1):
                 rec_symbol.append(nGrid[startSymbolIndex][startPRB*12 + n]*np.conj(r_u_v_c_alpha_sym_0[n]))
+            noisePower = noise_power[startSymbolIndex]
 
         elif pucch_format0_param["nrOfSymbols"] == 2:  # Coherent Combining
 
             for n in range(0, 12, 1):
                 rec_symbol.append(nGrid[startSymbolIndex][startPRB * 12 + n] * np.conj(r_u_v_c_alpha_sym_0[n]))
                 rec_symbol[n] += nGrid[startSymbolIndex+1][startPRB * 12 + n] * np.conj(r_u_v_c_alpha_sym_1[n])
+            noisePower = (noise_power[startSymbolIndex] + noise_power[startSymbolIndex+1])/2
+
 
         # if Harq Bit is 1
         if pucch_format0_param["nHarqBit"] == 1:
@@ -186,11 +190,19 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                 corr_bit_1 += rec_symbol[n]*cmath.exp(complex(0, -math.pi*n))
 
             if corr_bit_1.real > corr_bit_0.real:
-                harq_bit = [1]
+                harq_bit = 1
+                sig_power = np.absolute(corr_bit_1/12)**2
+                if sig_power > noisePower:
+                    dtx = 0
+                else:
+                    dtx = 1
             else:
-                harq_bit = [0]
-
-            print(harq_bit, corr_bit_1, corr_bit_0)
+                harq_bit = 0
+                sig_power = np.absolute(corr_bit_0/12)**2
+                if sig_power > noisePower:
+                    dtx = 0
+                else:
+                    dtx = 1
 
         elif pucch_format0_param["nHarqBit"] == 2:
 
@@ -211,16 +223,35 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
 
             if harq_bit == 0:
                 harq_bit = [0, 0]
+                sig_power = np.absolute(corr_bit_0_0 / 12) ** 2
+                if sig_power > noisePower:
+                    dtx = 0
+                else:
+                    dtx = 1
 
             if harq_bit == 1:
                 harq_bit = [0, 1]
+                sig_power = np.absolute(corr_bit_0_1 / 12) ** 2
+                if sig_power > noisePower:
+                    dtx = 0
+                else:
+                    dtx = 1
 
             if harq_bit == 2:
                 harq_bit = [1, 0]
+                sig_power = np.absolute(corr_bit_1_0 / 12) ** 2
+                if sig_power > noisePower:
+                    dtx = 0
+                else:
+                    dtx = 1
 
             if harq_bit == 3:
                 harq_bit = [1, 1]
-
-        return harq_bit
+                sig_power = np.absolute(corr_bit_1_1 / 12) ** 2
+                if sig_power > noisePower:
+                    dtx = 0
+                else:
+                    dtx = 1
+        return [harq_bit, dtx]
 
 
