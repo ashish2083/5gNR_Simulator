@@ -11,25 +11,25 @@ import cSequence
 class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
 
     pucch_resource_set = [[0, 12, 2, 0, [0, 3]],
-                         [0, 12, 2, 0, [0, 4, 8]],
-                         [0, 12, 2, 3, [0, 4, 8]],
-                         [1, 10, 4, 0, [0, 6]],
-                         [1, 10, 4, 0, [0, 3, 6, 9]],
-                         [1, 10, 4, 2, [0, 3, 6, 9]],
-                         [1, 10, 4, 4, [0, 3, 6, 9]],
-                         [1, 4, 10, 0, [0, 6]],
-                         [1, 4, 10, 0, [0, 3, 6, 9]],
-                         [1, 4, 10, 2, [0, 3, 6, 9]],
-                         [1, 4, 10, 4, [0, 3, 6, 9]],
-                         [1, 0, 14, 0, [0, 6]],
-                         [1, 0, 14, 0, [0, 3, 6, 9]],
-                         [1, 0, 14, 2, [0, 3, 6, 9]],
-                         [1, 0, 14, 4, [0, 3, 6, 9]],
-                         [1, 0, 14, 123, [0, 3, 6, 9]]]
+                          [0, 12, 2, 0, [0, 4, 8]],
+                          [0, 12, 2, 3, [0, 4, 8]],
+                          [1, 10, 4, 0, [0, 6]],
+                          [1, 10, 4, 0, [0, 3, 6, 9]],
+                          [1, 10, 4, 2, [0, 3, 6, 9]],
+                          [1, 10, 4, 4, [0, 3, 6, 9]],
+                          [1, 4, 10, 0, [0, 6]],
+                          [1, 4, 10, 0, [0, 3, 6, 9]],
+                          [1, 4, 10, 2, [0, 3, 6, 9]],
+                          [1, 4, 10, 4, [0, 3, 6, 9]],
+                          [1, 0, 14, 0, [0, 6]],
+                          [1, 0, 14, 0, [0, 3, 6, 9]],
+                          [1, 0, 14, 2, [0, 3, 6, 9]],
+                          [1, 0, 14, 4, [0, 3, 6, 9]],
+                          [1, 0, 14, 123, [0, 3, 6, 9]]]
 
     pucch_format_1_table_data = [[4, 2, 1, 1],
                                  [5, 2, 1, 1],
-                                 [6, 2, 1, 2],
+                                 [6, 3, 1, 2],
                                  [7, 3, 1, 2],
                                  [8, 4, 2, 2],
                                  [9, 4, 2, 2],
@@ -76,6 +76,16 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
     N_sc_rb = 12
 
     pucch_format0_param = {"pucchGroupHopping": 'neither',
+                           "initialCyclicShift": -1,
+                           "nrOfSymbols": -1,
+                           "startSymbolIndex": -1,
+                           "nHarqBit": -1,
+                           "harqBit0": -1,
+                           "harqBit1": -1,
+                           "startPRB": -1,
+                           "nHopPRB": -1
+                           }
+    pucch_format1_param = {"pucchGroupHopping": 'neither',
                            "initialCyclicShift": -1,
                            "nrOfSymbols": -1,
                            "startSymbolIndex": -1,
@@ -181,74 +191,115 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
 
         # Modulating bits
         mod_sym = complex(0,0)
-        if pucch_format0_param["nHarqBit"] == 1:
-            mod_sym = 1 / np.sqrt(2) * complex([1 - 2 * pucch_format0_param["harqBit0"]],
-                                               [1 - 2 * pucch_format0_param["harqBit0"]])
+        if pucch_format1_param["nHarqBit"] == 1:
+            mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * pucch_format1_param["harqBit0"],
+                                               1 - 2 * pucch_format1_param["harqBit0"])  # BPSK
         else:
-            mod_sym = 1 / np.sqrt(2) * complex([1 - 2 * pucch_format0_param["harqBit0"]],
-                                               [1 - 2 * pucch_format0_param["harqBit1"]])
+            mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * pucch_format1_param["harqBit0"],
+                                               1 - 2 * pucch_format1_param["harqBit1"])  # QPSK
 
-        # Generate Base Sequence
-        m_o = pucch_format0_param["initialCyclicShift"]
-        [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
-        cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, 0, n_id)
-        r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym_0, 1, 0)
+        # Generate DMRS Sequence
 
-        # Generating DMRS
+        l = pucch_format1_param["startSymbolIndex"]
+        n_symbol = pucch_format1_param["nrOfSymbols"]
+        n_pucch_1_sf_m_dash = self.pucch_format_1_table_dmrs[n_symbol-4][1]  #No support for pucch hopping for now
 
-        # Modulating Base Sequence
-        for n in range(0, self.N_sc_rb,1):
-            r_u_v_c_alpha_seq[n] = mod_sym*r_u_v_c_alpha_seq[n]
+        n_dmrs_symbol = (n_symbol + 1) // 2
 
-        l = pucch_format0_param["startSymbolIndex"]
+        i = pucch_format1_param["spread_seq_idx"]
 
-        # Generate Cyclic shift for symbol 0
-        m_o = pucch_format0_param["initialCyclicShift"]
-        m_cs = 0
+        if i == 0:
+            w_i = self.pucch_format_1_i_0_table[n_pucch_1_sf_m_dash-1]
 
-        if pucch_format0_param["nHarqBit"] == 1:
+        if i == 1:
+            w_i = self.pucch_format_1_i_1_table[n_pucch_1_sf_m_dash - 1]
 
-            m_cs = self.mcs_one_bit[pucch_format0_param["harqBit0"]]
+        if i == 2:
+            w_i = self.pucch_format_1_i_2_table[n_pucch_1_sf_m_dash - 1]
 
-        elif pucch_format0_param["nHarqBit"] == 2:
+        if i == 3:
+            w_i = self.pucch_format_1_i_3_table[n_pucch_1_sf_m_dash - 1]
 
-            index = pucch_format0_param["harqBit0"]+2*pucch_format0_param["harqBit1"]
-            m_cs = self.mcs_two_bits[index]
+        if i == 4:
+            w_i = self.pucch_format_1_i_4_table[n_pucch_1_sf_m_dash - 1]
 
-        else:
-            print("PUCCH / pucch_format_0: Error with no of Harq bits")
-        if pucch_format0_param["nrOfSymbols"] == 1:
+        if i == 5:
+            w_i = self.pucch_format_1_i_5_table[n_pucch_1_sf_m_dash - 1]
 
-            [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
-            cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, m_cs, n_id)
-            r_u_v_c_alpha_sym_0 = self.reference_seq(u, v, cyclic_shift_sym_0, 1, 0)
+        if i == 6:
+            w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
 
-        elif pucch_format0_param["nrOfSymbols"] == 2:
+        if i == 7:
+            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
 
-            [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
-            cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, m_cs, n_id)
-            cyclic_shift_sym_1 = self.cyclic_shift_ncs(n_sf_u, l+1, 0, m_o, m_cs, n_id)
-            r_u_v_c_alpha_sym_0 = self.reference_seq(u, v, cyclic_shift_sym_0, 1, 0)
-            r_u_v_c_alpha_sym_1 = self.reference_seq(u, v, cyclic_shift_sym_1, 1, 0)
+        [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
+                                   pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
 
-        else:
-            print("PUCCH / pucch_format_0: Error with no of pucch symbols")
+        dmrs_sequence = []
+        for n in range(0, n_pucch_1_sf_m_dash, 1):
+            m_o = pucch_format1_param["initialCyclicShift"]
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l+n*2), 0, m_o, 0, n_id)
+            r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
+            seq_mult = cmath.exp(complex(0, 2*math.pi * w_i[n]/n_dmrs_symbol))
+            dmrs_sequence = np.r_[dmrs_sequence, np.dot(seq_mult, r_u_v_c_alpha_seq)]
 
-        # Mapping to PRB
-        startSymbolIndex = pucch_format0_param["startSymbolIndex"]
-        startPRB = pucch_format0_param["startPRB"]
+        # Generate Data Sequence
 
-        if pucch_format0_param["nrOfSymbols"] == 1:
+        l = pucch_format1_param["startSymbolIndex"]
+        n_symbol = pucch_format1_param["nrOfSymbols"]
+        n_pucch_1_sf_m_dash = self.pucch_format_1_table_data[n_symbol - 4][1]  # No support for pucch hopping for now
 
-            for n in range(0, 12, 1):
-               nGrid[startSymbolIndex][startPRB*12+n] = r_u_v_c_alpha_sym_0[n]
+        n_data_symbol = n_symbol - n_dmrs_symbol
 
-        elif pucch_format0_param["nrOfSymbols"] == 2:
+        if i == 0:
+            w_i = self.pucch_format_1_i_0_table[n_pucch_1_sf_m_dash - 1]
 
-            for n in range(0, 12, 1):
+        if i == 1:
+            w_i = self.pucch_format_1_i_1_table[n_pucch_1_sf_m_dash - 1]
 
-                nGrid[startSymbolIndex][startPRB*12 + n] = r_u_v_c_alpha_sym_0[n]
-                nGrid[startSymbolIndex+1][startPRB*12 + n] = r_u_v_c_alpha_sym_1[n]
+        if i == 2:
+            w_i = self.pucch_format_1_i_2_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 3:
+            w_i = self.pucch_format_1_i_3_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 4:
+            w_i = self.pucch_format_1_i_4_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 5:
+            w_i = self.pucch_format_1_i_5_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 6:
+            w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 7:
+            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
+
+        [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
+                                   pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
+
+        data_sequence = []
+
+        for n in range(0, n_pucch_1_sf_m_dash, 1):
+            m_o = pucch_format1_param["initialCyclicShift"]
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l + n * 2 + 1), 0, m_o, 0, n_id)
+            r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
+            spread_coefficient = mod_sym*cmath.exp(complex(0, 2 * math.pi * w_i[n] / n_data_symbol))
+            data_sequence = np.r_[data_sequence, np.dot(spread_coefficient, r_u_v_c_alpha_seq)]
+
+        # Mapping on to the Grid
+        startPRB = pucch_format1_param["startPRB"]
+
+        # DMRS
+        for n in range(0, n_dmrs_symbol, 1):
+            for m in range(0, self.N_sc_rb):
+                nGrid[l+2*n][startPRB*12 + m] = dmrs_sequence[n*self.N_sc_rb +m]
+
+        # Data
+
+        for n in range(0, n_data_symbol, 1):
+            for m in range(0, self.N_sc_rb):
+                nGrid[l + (2*n)+1][startPRB * 12 + m] = data_sequence[n * self.N_sc_rb + m]
 
         return nGrid
 
@@ -308,7 +359,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                 corr_bit_1 += rec_symbol[n]*cmath.exp(complex(0, -math.pi*n))
 
             if corr_bit_1.real > corr_bit_0.real:
-                harq_bit = 1
+                harq_bit = np.array(1)
                 sig_power = np.absolute(corr_bit_1/12)**2
 
                 if sig_power > noise_power:
@@ -316,7 +367,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                 else:
                     dtx = 1
             else:
-                harq_bit = 0
+                harq_bit = np.array(0)
                 sig_power = np.absolute(corr_bit_0/12)**2
 
                 if sig_power > noise_power:
@@ -341,7 +392,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
             harq_bit = dec_mat.index(max(dec_mat))
 
             if harq_bit == 0:
-                harq_bit = [0, 0]
+                harq_bit = np.array([0, 0])
                 sig_power = np.absolute(corr_bit_0_0/12) ** 2
 
                 if sig_power > noise_power:
@@ -350,7 +401,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                     dtx = 1
 
             if harq_bit == 1:
-                harq_bit = [0, 1]
+                harq_bit = np.array([0, 1])
                 sig_power = np.absolute(corr_bit_0_1/12) ** 2
                 if sig_power > noise_power:
                     dtx = 0
@@ -358,7 +409,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                     dtx = 1
 
             if harq_bit == 2:
-                harq_bit = [1, 0]
+                harq_bit = np.array([1, 0])
                 sig_power = np.absolute(corr_bit_1_0/12) ** 2
                 if sig_power > noise_power:
                     dtx = 0
@@ -366,12 +417,154 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                     dtx = 1
 
             if harq_bit == 3:
-                harq_bit = [1, 1]
+                harq_bit = np.array([1, 1])
                 sig_power = np.absolute(corr_bit_1_1/12) ** 2
                 if sig_power > noise_power:
                     dtx = 0
                 else:
                     dtx = 1
         return [harq_bit, dtx]
+
+    def pucch_format_1_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format1_param,noise_power):
+
+        # Generate DMRS Sequence
+
+        l = pucch_format1_param["startSymbolIndex"]
+        n_symbol = pucch_format1_param["nrOfSymbols"]
+        n_pucch_1_sf_m_dash = self.pucch_format_1_table_dmrs[n_symbol - 4][1]  # No support for pucch hopping for now
+
+        n_dmrs_symbol = (n_symbol + 1) // 2
+
+        i = pucch_format1_param["spread_seq_idx"]
+
+        if i == 0:
+            w_i = self.pucch_format_1_i_0_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 1:
+            w_i = self.pucch_format_1_i_1_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 2:
+            w_i = self.pucch_format_1_i_2_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 3:
+            w_i = self.pucch_format_1_i_3_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 4:
+            w_i = self.pucch_format_1_i_4_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 5:
+            w_i = self.pucch_format_1_i_5_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 6:
+            w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 7:
+            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
+
+        [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
+                                   pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
+
+        dmrs_sequence = []
+        for n in range(0, n_pucch_1_sf_m_dash, 1):
+            m_o = pucch_format1_param["initialCyclicShift"]
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l + n * 2), 0, m_o, 0, n_id)
+            r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
+            seq_mult = cmath.exp(complex(0, 2 * math.pi * w_i[n] / n_dmrs_symbol))
+            dmrs_sequence = np.r_[dmrs_sequence, np.dot(seq_mult, r_u_v_c_alpha_seq)]
+
+        # Generate Data Sequence
+
+        l = pucch_format1_param["startSymbolIndex"]
+        n_symbol = pucch_format1_param["nrOfSymbols"]
+        n_pucch_1_sf_m_dash = self.pucch_format_1_table_data[n_symbol - 4][1]  # No support for pucch hopping for now
+
+        n_data_symbol = n_symbol - n_dmrs_symbol
+
+        if i == 0:
+            w_i = self.pucch_format_1_i_0_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 1:
+            w_i = self.pucch_format_1_i_1_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 2:
+            w_i = self.pucch_format_1_i_2_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 3:
+            w_i = self.pucch_format_1_i_3_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 4:
+            w_i = self.pucch_format_1_i_4_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 5:
+            w_i = self.pucch_format_1_i_5_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 6:
+            w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
+
+        if i == 7:
+            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
+
+        [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
+                                   pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
+
+        data_sequence = []
+        for n in range(0, n_pucch_1_sf_m_dash, 1):
+            m_o = pucch_format1_param["initialCyclicShift"]
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l + n * 2 + 1), 0, m_o, 0, n_id)
+            r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
+            spread_coefficient = cmath.exp(complex(0, 2 * math.pi * w_i[n] / n_data_symbol))
+            data_sequence = np.r_[data_sequence, np.dot(spread_coefficient, r_u_v_c_alpha_seq)]
+
+        # Getting Start PRB
+        startPRB = pucch_format1_param["startPRB"]
+
+        # Channel Estimate - Using simple averaging in as the PRB are less and channel is assumed to coherent during the
+        # duration of the PUCCH transmission. Can be changed based on use cases.
+        channel_estimate = 0
+        for n in range(0, n_dmrs_symbol, 1):
+            for m in range(0, self.N_sc_rb):
+                channel_estimate += nGrid[l + 2 * n][startPRB * 12 + m]*np.conj(dmrs_sequence[n * self.N_sc_rb + m])
+
+        channel_estimate = channel_estimate/n_dmrs_symbol/self.N_sc_rb
+
+        # Equalizing Data / MMSE receiever
+        data_estimate = 0
+        for n in range(0, n_data_symbol, 1):
+            for m in range(0, self.N_sc_rb):
+                data_estimate += nGrid[l + 2 * n + 1][startPRB * 12 + m]*np.conj(data_sequence[n * self.N_sc_rb + m])
+
+        data_estimate = data_estimate/n_data_symbol/self.N_sc_rb
+
+        equalized_data = data_estimate*np.conj(channel_estimate)/(np.absolute(channel_estimate)**2 + noise_power) # MMSE Equalizer
+
+        harq_bit = np.array([0])
+
+        sig_power = np.absolute(data_estimate)**2
+
+        # Demodulation
+        if pucch_format1_param["nHarqBit"] == 1:
+           if equalized_data.real < 0 and equalized_data.imag < 0:
+                harq_bit = np.array([1])
+        else:
+            if equalized_data.real > 0:
+                if equalized_data.imag > 0:
+                    harq_bit = np.array([0, 0])
+                else:
+                    harq_bit = np.array([1, 0])
+            else:
+                if equalized_data.imag < 0:
+                    harq_bit = np.array([1, 1])
+                else:
+                    harq_bit = np.array([0, 1])
+
+        dtx = 0
+
+        if sig_power < noise_power:
+            dtx = 1
+
+       # print(sig_power, harq_bit, dtx)
+
+        return [harq_bit, dtx]
+
 
 

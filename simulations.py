@@ -25,11 +25,12 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 1000       # Frame to simulate
+nFrame = 500      # Frame to simulate
 
 nFrameGrid = []
 
 p1 = pucch.pucch()
+p2 = pucch.pucch()
 p1.pucch_format0_param["pucchGroupHopping"] = 'neither'
 p1.pucch_format0_param["pucchFrequencyHopping"] = 'disable'
 p1.pucch_format0_param["initialCyclicShift"] = 5
@@ -41,11 +42,26 @@ p1.pucch_format0_param["harqBit1"] = 1
 p1.pucch_format0_param["startPRB"] = 10
 p1.pucch_format0_param["nHopPRB"] = 20
 
-nTxBits = np.random.randint(0, 2, nFrame*p1.pucch_format0_param["nHarqBit"])
+
+p2.pucch_format1_param["pucchGroupHopping"] = 'neither'
+p2.pucch_format1_param["pucchFrequencyHopping"] = 'disable'
+p2.pucch_format1_param["initialCyclicShift"] = 5
+p2.pucch_format1_param["nrOfSymbols"] = 6
+p2.pucch_format1_param["startSymbolIndex"] = 0
+p2.pucch_format1_param["nHarqBit"] = 2
+p2.pucch_format1_param["harqBit0"] = 0
+p2.pucch_format1_param["harqBit1"] = 0
+p2.pucch_format1_param["startPRB"] = 10
+p2.pucch_format1_param["nHopPRB"] = 20
+p2.pucch_format1_param["spread_seq_idx"] = 1
+
+#nTxBits = np.random.randint(0, 2, nFrame*p1.pucch_format0_param["nHarqBit"])
+nTxBits = np.random.randint(0, 2, nFrame*p2.pucch_format1_param["nHarqBit"])
+
 snr_sweep = []
 ber_sweep = []
 
-for snr_db in range(-4, 14, 1):
+for snr_db in range(-4, 10, 1):
     nRxBits = []
     print(snr_db)
     for frame in range(0, nFrame, 1):
@@ -57,13 +73,25 @@ for snr_db in range(-4, 14, 1):
         else:
             p1.pucch_format0_param["harqBit0"] = nTxBits[frame]
 
+        if p2.pucch_format1_param["nHarqBit"] == 2:
+            p2.pucch_format1_param["harqBit0"] = nTxBits[2 * frame]
+            p2.pucch_format1_param["harqBit1"] = nTxBits[2 * frame + 1]
+        else:
+            p2.pucch_format1_param["harqBit0"] = nTxBits[frame]
+
         # Create Gird #
-        txGrid = p1.pucch_format_0(nTxGrid, 0, 400, 0, p1.pucch_format0_param)
+        #txGrid = p1.pucch_format_0(nTxGrid, 0, 400, 0, p1.pucch_format0_param)
+        txGrid = p2.pucch_format_1(nTxGrid, 0, 400, 0, p2.pucch_format1_param)
+
         txVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
 
         for n in range(0, num_slot_sym, 1):
             txVector[n] = np.fft.ifft(txGrid[n])*np.sqrt(fft_size)
 
+        # Add Cyclic Prefix
+        # TBD
+
+        # Add Channel
         snr = 10**(snr_db/10)
         for n in range(0, num_slot_sym, 1):
             sig_power = snr  # Noise Power  == 1
@@ -76,16 +104,27 @@ for snr_db in range(-4, 14, 1):
 
         rxVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
 
+        # Remove Cyclic Prefix
+        #TBD
+
         for n in range(0, num_slot_sym, 1):
             rxVector[n] = np.fft.fft(txVector[n])/np.sqrt(fft_size)
 
         # Receiver
-        harq_bit = p1.pucch_format_0_rec(rxVector, 0, 400, 0, p1.pucch_format0_param, noise_power)
-        if p1.pucch_format0_param["nHarqBit"] == 2:
+        # harq_bit = p1.pucch_format_0_rec(rxVector, 0, 400, 0, p1.pucch_format0_param, noise_power)
+        harq_bit = p2.pucch_format_1_rec(rxVector, 0, 400, 0, p2.pucch_format1_param, noise_power)
+
+        # if p1.pucch_format0_param["nHarqBit"] == 2:
+            # nRxBits.append(harq_bit[0][1])
+            # nRxBits.append(harq_bit[0][0])
+        # else:
+          #  nRxBits.append(harq_bit[0])
+        if p2.pucch_format1_param["nHarqBit"] == 2:
             nRxBits.append(harq_bit[0][1])
             nRxBits.append(harq_bit[0][0])
         else:
             nRxBits.append(harq_bit[0])
+
     bit_error = np.sum(np.abs(nRxBits-nTxBits))/len(nTxBits)
     snr_sweep.append(snr_db)
     ber_sweep.append(bit_error)
