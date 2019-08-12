@@ -25,7 +25,7 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 500       # Frame to simulate
+nFrame = 1000       # Frame to simulate
 
 nFrameGrid = []
 
@@ -45,12 +45,11 @@ nTxBits = np.random.randint(0, 2, nFrame*p1.pucch_format0_param["nHarqBit"])
 snr_sweep = []
 ber_sweep = []
 
-for snr_db in range(-18, 4, 1):
+for snr_db in range(-4, 14, 1):
     nRxBits = []
     print(snr_db)
     for frame in range(0, nFrame, 1):
         nTxGrid = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
-        noise_power = [0 for x in range(num_slot_sym)]
 
         if p1.pucch_format0_param["nHarqBit"] == 2:
             p1.pucch_format0_param["harqBit0"] = nTxBits[2*frame]
@@ -67,12 +66,13 @@ for snr_db in range(-18, 4, 1):
 
         snr = 10**(snr_db/10)
         for n in range(0, num_slot_sym, 1):
-            sig_power = np.sum(np.absolute(txVector[n])**2)  # RMS signal power
-            noise_power[n] = sig_power/snr
-            noise_real = np.sqrt(noise_power[n]/2)*np.random.normal(0, 1, fft_size)
-            noise_imag = np.sqrt(noise_power[n]/2)*np.random.normal(0, 1, fft_size)
-            txVector[n].real = txVector[n].real + noise_real
-            txVector[n].imag = txVector[n].imag + noise_imag
+            sig_power = snr  # Noise Power  == 1
+            noise_power = 1
+            noise_real = np.sqrt(1/2)*np.random.normal(0, 1, fft_size)
+            noise_imag = np.sqrt(1/2)*np.random.normal(0, 1, fft_size)
+
+            txVector[n].real = np.sqrt(sig_power)*txVector[n].real + noise_real
+            txVector[n].imag = np.sqrt(sig_power)*txVector[n].imag + noise_imag
 
         rxVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
 
@@ -81,8 +81,6 @@ for snr_db in range(-18, 4, 1):
 
         # Receiver
         harq_bit = p1.pucch_format_0_rec(rxVector, 0, 400, 0, p1.pucch_format0_param, noise_power)
-
-        # print(harq_bit)
         if p1.pucch_format0_param["nHarqBit"] == 2:
             nRxBits.append(harq_bit[0][1])
             nRxBits.append(harq_bit[0][0])
@@ -100,5 +98,6 @@ Y = [x for x in ber_sweep]
 
 f1 = plt.figure()
 plt.semilogy(X, Y, color='red')
+plt.grid
 plt.show()
 
