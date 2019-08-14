@@ -49,7 +49,6 @@ p2.pucch_format1_param["pucchFrequencyHopping"] = 'disable'
 p2.pucch_format1_param["initialCyclicShift"] = 5
 p2.pucch_format1_param["nrOfSymbols"] = 6
 p2.pucch_format1_param["startSymbolIndex"] = 0
-p2.pucch_format1_param["sr"] = 0
 p2.pucch_format1_param["nHarqBit"] = 2
 p2.pucch_format1_param["harqBit0"] = 0
 p2.pucch_format1_param["harqBit1"] = 0

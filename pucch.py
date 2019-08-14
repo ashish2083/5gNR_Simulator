@@ -95,7 +95,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                            "nHarqBit": -1,
                            "harqBit0": -1,
                            "harqBit1": -1,
-                           "sr": -1,
                            "startPRB": -1,
                            "nHopPRB": -1
                            }
@@ -560,18 +559,17 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         # duration of the PUCCH transmission. Can be changed based on use cases.
         channel_estimate = 0
         for n in range(0, n_dmrs_symbol, 1):
-            for m in range(0, self.N_sc_rb):
-                channel_estimate += nGrid[l + 2 * n][startPRB * 12 + m]*np.conj(dmrs_sequence[n * self.N_sc_rb + m])
+            channel_estimate += np.sum(nGrid[l + 2 * n][startPRB * 12 + np.r_[:12]]*np.conj(dmrs_sequence[n * self.N_sc_rb + np.r_[:12]]))
 
         channel_estimate = channel_estimate/n_dmrs_symbol/self.N_sc_rb
 
         # Equalizing Data / MMSE receiever
+
         data_estimate = 0
         for n in range(0, n_data_symbol, 1):
-            for m in range(0, self.N_sc_rb):
-                data_estimate += nGrid[l + 2 * n + 1][startPRB * 12 + m]*np.conj(data_sequence[n * self.N_sc_rb + m])
+            data_estimate += np.sum(nGrid[l + 2 * n + 1][startPRB * 12 + np.r_[:12]]*np.conj(data_sequence[n * self.N_sc_rb + np.r_[:12]]))
 
-        data_estimate = data_estimate/n_data_symbol/self.N_sc_rb
+        #data_estimate = data_estimate/n_data_symbol/self.N_sc_rb
 
         equalized_data = data_estimate*np.conj(channel_estimate)/(np.absolute(channel_estimate)**2 + noise_power) # MMSE Equalizer
 
@@ -600,9 +598,11 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         if sig_power < noise_power:
             dtx = 1
 
-       # print(sig_power, harq_bit, dtx)
+        snr = 10*np.log10(sig_power/noise_power)
 
-        return [harq_bit, dtx]
+        # print(sig_power, harq_bit, dtx)
+
+        return [harq_bit, snr, dtx]
 
 
 
