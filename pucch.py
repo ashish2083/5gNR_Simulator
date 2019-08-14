@@ -72,7 +72,9 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
     pucch_format_1_i_6_table = [[0], [0, 0], [0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
                                 [0, 6, 5, 4, 3, 2, 1]]
     mcs_one_bit = [0, 6]
+    mcs_one_bit_sr = [3, 9]
     mcs_two_bits = [0, 3, 9, 6]
+    mcs_two_bits_sr = [1, 4, 7, 10]
     N_sc_rb = 12
 
     pucch_format0_param = {"pucchGroupHopping": 'neither',
@@ -82,6 +84,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                            "nHarqBit": -1,
                            "harqBit0": -1,
                            "harqBit1": -1,
+                           "sr": -1,
                            "startPRB": -1,
                            "nHopPRB": -1
                            }
@@ -92,6 +95,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                            "nHarqBit": -1,
                            "harqBit0": -1,
                            "harqBit1": -1,
+                           "sr": -1,
                            "startPRB": -1,
                            "nHopPRB": -1
                            }
@@ -140,20 +144,28 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         # Generate Cyclic shift for symbol 0
         m_o = pucch_format0_param["initialCyclicShift"]
         m_cs = 0
-
         if pucch_format0_param["nHarqBit"] == 1:
-
-            m_cs = self.mcs_one_bit[pucch_format0_param["harqBit0"]]
+            if pucch_format0_param["sr"] == 1:
+                m_cs = self.mcs_one_bit_sr[pucch_format0_param["harqBit0"]]
+            else:
+                m_cs = self.mcs_one_bit[pucch_format0_param["harqBit0"]]
 
         elif pucch_format0_param["nHarqBit"] == 2:
 
             index = pucch_format0_param["harqBit0"]+2*pucch_format0_param["harqBit1"]
-            m_cs = self.mcs_two_bits[index]
+            if pucch_format0_param["sr"] == 1:
+                m_cs = self.mcs_two_bits_sr[index]
+            else:
+                m_cs = self.mcs_two_bits[index]
 
         else:
-            print("PUCCH / pucch_format_0: Error with no of Harq bits")
-        if pucch_format0_param["nrOfSymbols"] == 1:
+            if pucch_format0_param["sr"] == 1:
+                if pucch_format0_param["sr"] == 1:
+                    m_cs = 0
+                else:
+                    print("PUCCH / pucch_format_0: Invalid format")
 
+        if pucch_format0_param["nrOfSymbols"] == 1:
             [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
             cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, m_cs, n_id)
             r_u_v_c_alpha_sym_0 = self.reference_seq(u, v, cyclic_shift_sym_0, 1, 0)
@@ -305,6 +317,9 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
 
     def pucch_format_0_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format0_param, noise_power):
 
+        expn = np.vectorize(cmath.exp)
+        cmplx = np.vectorize(complex)
+
         r_u_v_c_alpha_sym_0 = []
         r_u_v_c_alpha_sym_1 = []
 
@@ -315,13 +330,11 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         m_o = pucch_format0_param["initialCyclicShift"]
 
         if pucch_format0_param["nrOfSymbols"] == 1:
-
             [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
             cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, 0, n_id)
             r_u_v_c_alpha_sym_0 = self.reference_seq(u, v, cyclic_shift_sym_0, 1, 0)
 
         elif pucch_format0_param["nrOfSymbols"] == 2:
-
             [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
             cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, 0, n_id)
             cyclic_shift_sym_1 = self.cyclic_shift_ncs(n_sf_u, l+1, 0, m_o, 0, n_id)
@@ -339,91 +352,176 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         if pucch_format0_param["nrOfSymbols"] == 1:
 
             # Get PUCCH format 0 Symbol and derotate with reference symbol
-            for n in range(0, 12, 1):
-                rec_symbol.append(nGrid[startSymbolIndex][startPRB*12 + n]*np.conj(r_u_v_c_alpha_sym_0[n]))
+            rec_symbol = nGrid[startSymbolIndex][startPRB*12 + np.r_[:12]]*np.conj(r_u_v_c_alpha_sym_0)
 
         elif pucch_format0_param["nrOfSymbols"] == 2:  # Coherent Combining
 
-            for n in range(0, 12, 1):
-                rec_symbol.append(nGrid[startSymbolIndex][startPRB * 12 + n] * np.conj(r_u_v_c_alpha_sym_0[n])/2)
-                rec_symbol[n] += nGrid[startSymbolIndex+1][startPRB * 12 + n] * np.conj(r_u_v_c_alpha_sym_1[n])/2
+            rec_symbol = nGrid[startSymbolIndex][startPRB*12 + np.r_[:12]]*np.conj(r_u_v_c_alpha_sym_0)/2
+            rec_symbol += nGrid[startSymbolIndex+1][startPRB*12 + np.r_[:12]]*np.conj(r_u_v_c_alpha_sym_0)/2
 
         # if Harq Bit is 1
+        sr = 0
+        harq_bit = np.array([0])
         if pucch_format0_param["nHarqBit"] == 1:
+            if pucch_format0_param["sr"] == 1:
+                corr_bit_0 = 0
+                corr_bit_1 = 0
 
-            corr_bit_1 = 0
+                corr_bit_0 = np.sum(rec_symbol*expn(cmplx(0, -math.pi/2 *np.r_[:12])))
+                corr_bit_1 = np.sum(rec_symbol*expn(cmplx(0, -3*math.pi/2 *np.r_[:12])))
 
-            corr_bit_0 = np.sum(rec_symbol)
+                if corr_bit_1.real > corr_bit_0.real:
+                    harq_bit = np.array(1)
+                    sig_power = np.absolute(corr_bit_1/12)**2
 
-            for n in range(0, 12, 1):
-                corr_bit_1 += rec_symbol[n]*cmath.exp(complex(0, -math.pi*n))
+                    if sig_power > noise_power:
+                        dtx = 0
+                        sr = 1
+                    else:
+                        dtx = 1
 
-            if corr_bit_1.real > corr_bit_0.real:
-                harq_bit = np.array(1)
-                sig_power = np.absolute(corr_bit_1/12)**2
-
-                if sig_power > noise_power:
-                    dtx = 0
                 else:
-                    dtx = 1
-            else:
-                harq_bit = np.array(0)
-                sig_power = np.absolute(corr_bit_0/12)**2
+                    harq_bit = np.array(0)
+                    sig_power = np.absolute(corr_bit_0/12)**2
 
-                if sig_power > noise_power:
-                    dtx = 0
+                    if sig_power > noise_power:
+                        dtx = 0
+                        sr = 1
+                    else:
+                        dtx = 1
+
+            else: # Non SR case
+                corr_bit_1 = 0
+                corr_bit_0 = np.sum(rec_symbol)
+                corr_bit_1 = np.sum(rec_symbol*expn(cmplx(0, -math.pi*np.r_[:12])))
+
+                if corr_bit_1.real > corr_bit_0.real:
+                    harq_bit = np.array(1)
+                    sig_power = np.absolute(corr_bit_1/12)**2
+
+                    if sig_power > noise_power:
+                        dtx = 0
+                    else:
+                        dtx = 1
                 else:
-                    dtx = 1
+                    harq_bit = np.array(0)
+                    sig_power = np.absolute(corr_bit_0/12)**2
+
+                    if sig_power > noise_power:
+                        dtx = 0
+                    else:
+                        dtx = 1
+
         elif pucch_format0_param["nHarqBit"] == 2:
+            if pucch_format0_param["sr"] == 1:
+                corr_bit_0_0 = 0
+                corr_bit_0_1 = 0
+                corr_bit_1_0 = 0
+                corr_bit_1_1 = 0
 
-            corr_bit_0_1 = 0
-            corr_bit_1_0 = 0
-            corr_bit_1_1 = 0
+                corr_bit_0_0 = np.sum(rec_symbol*expn(cmplx(0, -math.pi/6 *np.r_[:12])))
+                corr_bit_0_1 = np.sum(rec_symbol*expn(cmplx(0, -4*math.pi/6 *np.r_[:12])))
+                corr_bit_1_0 = np.sum(rec_symbol*expn(cmplx(0, -7*math.pi/6 *np.r_[:12])))
+                corr_bit_1_1 = np.sum(rec_symbol*expn(cmplx(0, -10*math.pi/6 *np.r_[:12])))
 
-            corr_bit_0_0 = np.sum(rec_symbol)
+                dec_mat = [corr_bit_0_0.real, corr_bit_0_1.real, corr_bit_1_0.real, corr_bit_1_1.real]
 
-            for n in range(0, 12, 1):
-                corr_bit_0_1 += rec_symbol[n]*cmath.exp(complex(0, -math.pi/2 * n))
-                corr_bit_1_0 += rec_symbol[n]*cmath.exp(complex(0, -3*math.pi/2 * n))
-                corr_bit_1_1 += rec_symbol[n]*cmath.exp(complex(0, -math.pi * n))
+                harq_bit_dec = dec_mat.index(max(dec_mat))
 
-            dec_mat = [corr_bit_0_0.real, corr_bit_0_1.real, corr_bit_1_0.real, corr_bit_1_1.real]
+                if harq_bit_dec == 0:
+                    harq_bit = np.array([0, 0])
+                    sig_power = np.absolute(corr_bit_0_0/12) ** 2
 
-            harq_bit = dec_mat.index(max(dec_mat))
+                    if sig_power > noise_power:
+                        dtx = 0
+                        sr  = 1
+                    else:
+                        dtx = 1
 
-            if harq_bit == 0:
-                harq_bit = np.array([0, 0])
-                sig_power = np.absolute(corr_bit_0_0/12) ** 2
+                if harq_bit_dec == 1:
+                    harq_bit = np.array([0, 1])
+                    sig_power = np.absolute(corr_bit_0_1/12) ** 2
+                    if sig_power > noise_power:
+                        dtx = 0
+                        sr = 1
+                    else:
+                        dtx = 1
 
+                if harq_bit_dec == 2:
+                    harq_bit = np.array([1, 0])
+                    sig_power = np.absolute(corr_bit_1_0/12) ** 2
+                    if sig_power > noise_power:
+                        dtx = 0
+                        sr = 1
+                    else:
+                        dtx = 1
+
+                if harq_bit_dec == 3:
+                    harq_bit = np.array([1, 1])
+                    sig_power = np.absolute(corr_bit_1_1/12) ** 2
+                    if sig_power > noise_power:
+                        dtx = 0
+                        sr = 1
+                    else:
+                        dtx = 1
+            else:
+                corr_bit_0_1 = 0
+                corr_bit_1_0 = 0
+                corr_bit_1_1 = 0
+
+                corr_bit_0_0 = np.sum(rec_symbol)
+                corr_bit_0_1 = np.sum(rec_symbol*expn(cmplx(0, -math.pi/2 *np.r_[:12])))
+                corr_bit_1_0 = np.sum(rec_symbol*expn(cmplx(0, -3*math.pi/2 *np.r_[:12])))
+                corr_bit_1_1 = np.sum(rec_symbol*expn(cmplx(0, -math.pi*np.r_[:12])))
+
+                dec_mat = [corr_bit_0_0.real, corr_bit_0_1.real, corr_bit_1_0.real, corr_bit_1_1.real]
+
+                harq_bit_dec = dec_mat.index(max(dec_mat))
+
+                if harq_bit_dec == 0:
+                    harq_bit = np.array([0, 0])
+                    sig_power = np.absolute(corr_bit_0_0/12) ** 2
+
+                    if sig_power > noise_power:
+                        dtx = 0
+                    else:
+                        dtx = 1
+
+                if harq_bit_dec == 1:
+                    harq_bit = np.array([0, 1])
+                    sig_power = np.absolute(corr_bit_0_1/12) ** 2
+                    if sig_power > noise_power:
+                        dtx = 0
+                    else:
+                        dtx = 1
+
+                if harq_bit_dec == 2:
+                    harq_bit = np.array([1, 0])
+                    sig_power = np.absolute(corr_bit_1_0/12) ** 2
+                    if sig_power > noise_power:
+                        dtx = 0
+                    else:
+                        dtx = 1
+
+                if harq_bit_dec == 3:
+                    harq_bit = np.array([1, 1])
+                    sig_power = np.absolute(corr_bit_1_1/12) ** 2
+                    if sig_power > noise_power:
+                        dtx = 0
+                    else:
+                        dtx = 1
+        else:
+            if pucch_format0_param["sr"] == 1:
+                corr_bit = np.sum(rec_symbol)
+                sig_power = np.absolute(corr_bit/12) ** 2
                 if sig_power > noise_power:
                     dtx = 0
+                    sr = 1
                 else:
                     dtx = 1
 
-            if harq_bit == 1:
-                harq_bit = np.array([0, 1])
-                sig_power = np.absolute(corr_bit_0_1/12) ** 2
-                if sig_power > noise_power:
-                    dtx = 0
-                else:
-                    dtx = 1
 
-            if harq_bit == 2:
-                harq_bit = np.array([1, 0])
-                sig_power = np.absolute(corr_bit_1_0/12) ** 2
-                if sig_power > noise_power:
-                    dtx = 0
-                else:
-                    dtx = 1
-
-            if harq_bit == 3:
-                harq_bit = np.array([1, 1])
-                sig_power = np.absolute(corr_bit_1_1/12) ** 2
-                if sig_power > noise_power:
-                    dtx = 0
-                else:
-                    dtx = 1
-        return [harq_bit, dtx]
+        return [harq_bit, sr, dtx]
 
     def pucch_format_1_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format1_param,noise_power):
 

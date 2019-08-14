@@ -36,7 +36,8 @@ p1.pucch_format0_param["pucchFrequencyHopping"] = 'disable'
 p1.pucch_format0_param["initialCyclicShift"] = 5
 p1.pucch_format0_param["nrOfSymbols"] = 1
 p1.pucch_format0_param["startSymbolIndex"] = 10
-p1.pucch_format0_param["nHarqBit"] = 1
+p1.pucch_format0_param["sr"] = 0
+p1.pucch_format0_param["nHarqBit"] = 2
 p1.pucch_format0_param["harqBit0"] = 0
 p1.pucch_format0_param["harqBit1"] = 1
 p1.pucch_format0_param["startPRB"] = 10
@@ -48,6 +49,7 @@ p2.pucch_format1_param["pucchFrequencyHopping"] = 'disable'
 p2.pucch_format1_param["initialCyclicShift"] = 5
 p2.pucch_format1_param["nrOfSymbols"] = 6
 p2.pucch_format1_param["startSymbolIndex"] = 0
+p2.pucch_format1_param["sr"] = 0
 p2.pucch_format1_param["nHarqBit"] = 2
 p2.pucch_format1_param["harqBit0"] = 0
 p2.pucch_format1_param["harqBit1"] = 0
@@ -55,8 +57,8 @@ p2.pucch_format1_param["startPRB"] = 10
 p2.pucch_format1_param["nHopPRB"] = 20
 p2.pucch_format1_param["spread_seq_idx"] = 1
 
-#nTxBits = np.random.randint(0, 2, nFrame*p1.pucch_format0_param["nHarqBit"])
-nTxBits = np.random.randint(0, 2, nFrame*p2.pucch_format1_param["nHarqBit"])
+nTxBits = np.random.randint(0, 2, nFrame*p1.pucch_format0_param["nHarqBit"])
+#nTxBits = np.random.randint(0, 2, nFrame*p2.pucch_format1_param["nHarqBit"])
 
 snr_sweep = []
 ber_sweep = []
@@ -70,18 +72,22 @@ for snr_db in range(-4, 10, 1):
         if p1.pucch_format0_param["nHarqBit"] == 2:
             p1.pucch_format0_param["harqBit0"] = nTxBits[2*frame]
             p1.pucch_format0_param["harqBit1"] = nTxBits[2*frame+1]
-        else:
+        elif p1.pucch_format0_param["nHarqBit"] == 1:
             p1.pucch_format0_param["harqBit0"] = nTxBits[frame]
-
-        if p2.pucch_format1_param["nHarqBit"] == 2:
-            p2.pucch_format1_param["harqBit0"] = nTxBits[2 * frame]
-            p2.pucch_format1_param["harqBit1"] = nTxBits[2 * frame + 1]
         else:
-            p2.pucch_format1_param["harqBit0"] = nTxBits[frame]
+            p1.pucch_format0_param["harqBit0"] = 0
+            p1.pucch_format0_param["harqBit1"] = 0
+
+
+        #if p2.pucch_format1_param["nHarqBit"] == 2:
+         #   p2.pucch_format1_param["harqBit0"] = nTxBits[2 * frame]
+         #   p2.pucch_format1_param["harqBit1"] = nTxBits[2 * frame + 1]
+        #else:
+         #   p2.pucch_format1_param["harqBit0"] = nTxBits[frame]
 
         # Create Gird #
-        #txGrid = p1.pucch_format_0(nTxGrid, 0, 400, 0, p1.pucch_format0_param)
-        txGrid = p2.pucch_format_1(nTxGrid, 0, 400, 0, p2.pucch_format1_param)
+        txGrid = p1.pucch_format_0(nTxGrid, 0, 400, 0, p1.pucch_format0_param)
+        #txGrid = p2.pucch_format_1(nTxGrid, 0, 400, 0, p2.pucch_format1_param)
 
         txVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
 
@@ -111,19 +117,20 @@ for snr_db in range(-4, 10, 1):
             rxVector[n] = np.fft.fft(txVector[n])/np.sqrt(fft_size)
 
         # Receiver
-        # harq_bit = p1.pucch_format_0_rec(rxVector, 0, 400, 0, p1.pucch_format0_param, noise_power)
-        harq_bit = p2.pucch_format_1_rec(rxVector, 0, 400, 0, p2.pucch_format1_param, noise_power)
+        harq_bit = p1.pucch_format_0_rec(rxVector, 0, 400, 0, p1.pucch_format0_param, noise_power)
+        # harq_bit = p2.pucch_format_1_rec(rxVector, 0, 400, 0, p2.pucch_format1_param, noise_power)
 
-        # if p1.pucch_format0_param["nHarqBit"] == 2:
-            # nRxBits.append(harq_bit[0][1])
-            # nRxBits.append(harq_bit[0][0])
-        # else:
-          #  nRxBits.append(harq_bit[0])
-        if p2.pucch_format1_param["nHarqBit"] == 2:
+        if p1.pucch_format0_param["nHarqBit"] == 2:
             nRxBits.append(harq_bit[0][1])
             nRxBits.append(harq_bit[0][0])
         else:
             nRxBits.append(harq_bit[0])
+
+        #if p2.pucch_format1_param["nHarqBit"] == 2:
+         #   nRxBits.append(harq_bit[0][1])
+         #   nRxBits.append(harq_bit[0][0])
+        #else:
+         #   nRxBits.append(harq_bit[0])
 
     bit_error = np.sum(np.abs(nRxBits-nTxBits))/len(nTxBits)
     snr_sweep.append(snr_db)
