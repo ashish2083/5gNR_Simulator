@@ -51,7 +51,21 @@ class encoder():
         output = np.sum((bits*self.rm_table), 1) % 2
         return output
 
+    def reed_muller_decoder_soft(self, soft_bits, len):
+        # Soft bits bit=0 -> + ; bit ==1 -> -1
+        # Correlate with RM_Table to get bits
+        dec_mat = []
+        for i in range(0, 2**len, 1):
+            bits = np.binary_repr(i, len)
+            bits = np.array([int(x) for x in bits])
+            enc_bits = (1-2*self.reed_muller_encoder(bits, len))
+            corr_bits = np.dot(enc_bits, soft_bits)
+            dec_mat.append(corr_bits)
 
+        dec_bit = dec_mat.index(max(dec_mat))
+        bits = np.binary_repr(dec_bit, len)
+        bits = np.array([int(x) for x in bits])
+        return bits
 
 
 
