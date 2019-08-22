@@ -325,6 +325,9 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if pucch_format2_param["cqi_bit_len"] < 3:
             print("PUCCH:pucch_format_2 Invalid no of CQI bits")
 
+        if pucch_format2_param["cqi_bit_len"] < 11:
+            print("ABC")
+            
         cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
         c_len = pucch_format2_param["coded_bit_len"]
         c_seq = self.generate_c_sequence(cinit, c_len)
