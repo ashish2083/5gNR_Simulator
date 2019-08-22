@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 import referenceSignal
 import cSequence
-
+import encoder
 # Creating PUCCH Channel Format 1,2,3,4
 
 
-class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
+class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encoder):
 
     pucch_resource_set = [[0, 12, 2, 0, [0, 3]],
                           [0, 12, 2, 0, [0, 4, 8]],
@@ -98,6 +98,12 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
                            "startPRB": -1,
                            "nHopPRB": -1
                            }
+    pucch_format2_param = {"startSymbolIndex": -1,
+                           "nrOfSymbols": -1,
+                           "nPRB": -1,
+                           "n_rnti": -1,
+                           "cqi_bit_len": -1,
+                          }
 
     def generate_u_v(self, pucchGroupHopping, pucchFrequencyHopping, n_id, n_sf_u, n_hop):
         # Generating u,v
@@ -311,6 +317,97 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence):
         for n in range(0, n_data_symbol, 1):
             for m in range(0, self.N_sc_rb):
                 nGrid[l + (2*n)+1][startPRB * 12 + m] = data_sequence[n * self.N_sc_rb + m]
+
+        return nGrid
+
+    def pucch_format_2(self, nGrid, n_sf_u, n_id, n_id_0, n_hop, cqi_bit, pucch_format2_param):
+        # Generate Scrambling cSequence
+        if pucch_format2_param["cqi_bit_len"] < 3:
+            print("PUCCH:pucch_format_2 Invalid no of CQI bits")
+
+        cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
+        c_len = pucch_format2_param["coded_bit_len"]
+        c_seq = self.generate_c_sequence(cinit, c_len)
+
+        # Scramble
+        scram_bit = (coded_bit + c_seq) % 2
+
+        data_sym_array = []
+
+        # Modulation QPSK
+        for n in range(0, c_len, 2):
+            mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * scram_bit[n],
+                                               1 - 2 * scram_bit[n+1])  # QPSK
+            data_sym_array.append(mod_sym)
+
+        # Generating Reference Signal
+        l = pucch_format2_param["startSymbolIndex"]
+        n_symbol = pucch_format2_param["nrOfSymbols"]
+        n_resrouce_block = pucch_format2_param["nPRB"]
+        n_resource_element = n_resrouce_block*self.N_sc_rb
+        n_pilot_bits = (n_resource_element/3)*2 # QPSK Bits
+
+        ref_sym_array = []
+
+        if n_symbol == 1:
+            c_init = ((2**17)*(14*n_sf_u + l + 1)(2*n_id_0+1) + 2*n_id_0) % (2**31)
+            c_len = n_pilot_bits
+            c_seq = self.generate_c_sequence(c_init, c_len)
+
+            for n in range(0, n_pilot_bits, 2):
+                mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * c_seq[n],
+                                                   1 - 2 * c_seq[n+1])  # QPSK
+                ref_sym_array.append(mod_sym)
+        else: # 2 Symbol
+
+            # First Symbol
+            c_init = ((2**17)*(14*n_sf_u + l + 1)(2*n_id_0+1) + 2*n_id_0) % (2**31)
+            c_len = n_pilot_bits
+            c_seq = self.generate_c_sequence(c_init, c_len)
+            for n in range(0, n_pilot_bits/2, 2):
+                mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * c_seq[n],
+                                                   1 - 2 * c_seq[n+1])  # QPSK
+                ref_sym_array.append(mod_sym)
+
+            # Second Symbol
+            c_init = ((2**17)*(14*n_sf_u + l+1 + 1)(2*Nid_0+1) + 2*Nid_0) % (2**31)
+            c_len = n_pilot_bits
+            c_seq = self.generate_c_sequence(c_init, c_len)
+            for n in range(0, n_pilot_bits, 2):
+                mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * c_seq[n],
+                                                   1 - 2 * c_seq[n+1])  # QPSK
+                ref_sym_array.append(mod_sym)
+
+
+        # Mapping on to the resource Grid
+        startPRB = pucch_format2_param["startPRB"]
+
+        # DMRS
+        if n_symbol == 1:
+            dmrs_loc = 0
+            data_loc = 0
+
+            for m in range(1, n_resrouce_block*self.N_sc_rb):
+                if(m % 4) == 0:
+                    nGrid[l][startPRB*12 + m] = ref_sym_array[dmrs_loc]
+                    dmrs_loc += 1
+                else:
+                    nGrid[l][startPRB*12 + m] = data_sym_array[data_loc]
+                    data_loc += 1
+
+        else:
+            dmrs_loc = 0
+            data_loc = 0
+
+            for m in range(1, n_resrouce_block*self.N_sc_rb):
+                if(m % 4) == 0:
+                    nGrid[l][startPRB*12 + m] = ref_sym_array[dmrs_loc]
+                    nGrid[l+1][startPRB*12 + m] = ref_sym_array[dmrs_loc + n_pilot_bits/2]
+                    dmrs_loc += 1
+                else:
+                    nGrid[l+1][startPRB*12 + m] = ref_sym_array[data_loc]
+                    nGrid[l+1][startPRB*12 + m] = ref_sym_array[data_loc]
+                    data_loc += 1
 
         return nGrid
 
