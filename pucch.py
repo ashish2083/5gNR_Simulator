@@ -101,8 +101,10 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
     pucch_format2_param = {"startSymbolIndex": -1,
                            "nrOfSymbols": -1,
                            "nPRB": -1,
+                           "startPRB": -1,
                            "n_rnti": -1,
                            "cqi_bit_len": -1,
+                           "cqi_bit": -1
                           }
 
     def generate_u_v(self, pucchGroupHopping, pucchFrequencyHopping, n_id, n_sf_u, n_hop):
@@ -320,16 +322,18 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         return nGrid
 
-    def pucch_format_2(self, nGrid, n_sf_u, n_id, n_id_0, n_hop, cqi_bit, pucch_format2_param):
+    def pucch_format_2(self, nGrid, n_sf_u, n_id, n_id_0, n_hop, pucch_format2_param):
         # Generate Scrambling cSequence
         if pucch_format2_param["cqi_bit_len"] < 3:
             print("PUCCH:pucch_format_2 Invalid no of CQI bits")
 
-        if pucch_format2_param["cqi_bit_len"] < 11:
-            print("ABC")
-            
+        if pucch_format2_param["cqi_bit_len"] <= 11:
+            coded_bit = self.reed_muller_encoder(pucch_format2_param["cqi_bit"], pucch_format2_param["cqi_bit_len"])
+            c_len = 32
+
+        # TBD Polar Code here
+
         cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
-        c_len = pucch_format2_param["coded_bit_len"]
         c_seq = self.generate_c_sequence(cinit, c_len)
 
         # Scramble
@@ -346,14 +350,15 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         # Generating Reference Signal
         l = pucch_format2_param["startSymbolIndex"]
         n_symbol = pucch_format2_param["nrOfSymbols"]
-        n_resrouce_block = pucch_format2_param["nPRB"]
-        n_resource_element = n_resrouce_block*self.N_sc_rb
-        n_pilot_bits = (n_resource_element/3)*2 # QPSK Bits
-
+        n_resource_block = pucch_format2_param["nPRB"]
+        n_resource_element = n_resource_block*self.N_sc_rb
+        n_pilot_bits = int(n_resource_block*4)*2 # QPSK Bits
+        n_pilot_sym  = (n_resource_block*4)*n_symbol
+        n_data_sym   = (n_resource_block*8)*n_symbol
         ref_sym_array = []
 
         if n_symbol == 1:
-            c_init = ((2**17)*(14*n_sf_u + l + 1)(2*n_id_0+1) + 2*n_id_0) % (2**31)
+            c_init = ((2**17)*(14*n_sf_u + l + 1)*(2*n_id_0+1) + 2*n_id_0) % (2**31)
             c_len = n_pilot_bits
             c_seq = self.generate_c_sequence(c_init, c_len)
 
@@ -364,23 +369,22 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         else: # 2 Symbol
 
             # First Symbol
-            c_init = ((2**17)*(14*n_sf_u + l + 1)(2*n_id_0+1) + 2*n_id_0) % (2**31)
+            c_init = ((2**17)*(14*n_sf_u + l + 1)*(2*n_id_0+1) + 2*n_id_0) % (2**31)
             c_len = n_pilot_bits
             c_seq = self.generate_c_sequence(c_init, c_len)
-            for n in range(0, n_pilot_bits/2, 2):
+
+            for n in range(0, n_pilot_bits, 2):
                 mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * c_seq[n],
                                                    1 - 2 * c_seq[n+1])  # QPSK
                 ref_sym_array.append(mod_sym)
-
             # Second Symbol
-            c_init = ((2**17)*(14*n_sf_u + l+1 + 1)(2*Nid_0+1) + 2*Nid_0) % (2**31)
+            c_init = ((2**17)*(14*n_sf_u + l+1 + 1)*(2*n_id_0+1) + 2*n_id_0) % (2**31)
             c_len = n_pilot_bits
             c_seq = self.generate_c_sequence(c_init, c_len)
             for n in range(0, n_pilot_bits, 2):
                 mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * c_seq[n],
                                                    1 - 2 * c_seq[n+1])  # QPSK
                 ref_sym_array.append(mod_sym)
-
 
         # Mapping on to the resource Grid
         startPRB = pucch_format2_param["startPRB"]
@@ -390,29 +394,29 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             dmrs_loc = 0
             data_loc = 0
 
-            for m in range(1, n_resrouce_block*self.N_sc_rb):
-                if(m % 4) == 0:
+            for m in range(0, n_resource_block*self.N_sc_rb,1):
+                if(m % (3*dmrs_loc+1)) == 0 and m !=0:
                     nGrid[l][startPRB*12 + m] = ref_sym_array[dmrs_loc]
                     dmrs_loc += 1
                 else:
                     nGrid[l][startPRB*12 + m] = data_sym_array[data_loc]
                     data_loc += 1
 
+
         else:
             dmrs_loc = 0
             data_loc = 0
 
-            for m in range(1, n_resrouce_block*self.N_sc_rb):
-                if(m % 4) == 0:
-                    nGrid[l][startPRB*12 + m] = ref_sym_array[dmrs_loc]
-                    nGrid[l+1][startPRB*12 + m] = ref_sym_array[dmrs_loc + n_pilot_bits/2]
+            for m in range(0, n_resource_block*self.N_sc_rb, 1):
+                if(m % (3*dmrs_loc+1)) == 0 and m != 0:
+                    nGrid[l][startPRB*12 + m] = 0 #ref_sym_array[dmrs_loc]
+                    nGrid[l+1][startPRB*12 + m] = 0 #*ref_sym_array[dmrs_loc + int(n_pilot_sym/2)]
                     dmrs_loc += 1
                 else:
-                    nGrid[l+1][startPRB*12 + m] = ref_sym_array[data_loc]
-                    nGrid[l+1][startPRB*12 + m] = ref_sym_array[data_loc]
+                    nGrid[l][startPRB*12 + m] = data_sym_array[data_loc]
+                    nGrid[l+1][startPRB*12 + m] = data_sym_array[data_loc +int(n_data_sym/2)]
                     data_loc += 1
-
-        return nGrid
+            return nGrid
 
     def pucch_format_0_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format0_param, noise_power):
 
