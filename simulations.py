@@ -103,7 +103,7 @@ for snr_db in range(-4, 10, 1):
         # Create Gird #
         #txGrid = p1.pucch_format_0(nTxGrid, 0, 400, 0, p1.pucch_format0_param)
         #txGrid = p2.pucch_format_1(nTxGrid, 0, 400, 0, p2.pucch_format1_param)
-        txGrid = p3.pucch_format_2(nTxGrid, 0, 400,100, 0, p3.pucch_format2_param)
+        txGrid = p3.pucch_format_2(nTxGrid, 0, 400, 100, 0, p3.pucch_format2_param)
 
         txVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
 
