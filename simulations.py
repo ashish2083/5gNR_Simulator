@@ -25,7 +25,7 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 5      # Frame to simulate
+nFrame = 500      # Frame to simulate
 
 nFrameGrid = []
 
@@ -74,7 +74,7 @@ nTxBits = np.random.randint(0, 2, nFrame*p3.pucch_format2_param["cqi_bit_len"])
 snr_sweep = []
 ber_sweep = []
 
-for snr_db in range(0, 1, 1):
+for snr_db in range(-4, 10, 1):
     nRxBits = []
     print(snr_db)
     for frame in range(0, nFrame, 1):
@@ -119,8 +119,8 @@ for snr_db in range(0, 1, 1):
             noise_real = np.sqrt(1/2)*np.random.normal(0, 1, fft_size)
             noise_imag = np.sqrt(1/2)*np.random.normal(0, 1, fft_size)
 
-            txVector[n].real = np.sqrt(sig_power)*txVector[n].real + 0*noise_real
-            txVector[n].imag = np.sqrt(sig_power)*txVector[n].imag + 0*noise_imag
+            txVector[n].real = np.sqrt(sig_power)*txVector[n].real + noise_real
+            txVector[n].imag = np.sqrt(sig_power)*txVector[n].imag + noise_imag
 
         rxVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
 
@@ -133,8 +133,8 @@ for snr_db in range(0, 1, 1):
         # Receiver
 #        harq_bit = p1.pucch_format_0_rec(rxVector, 0, 400, 0, p1.pucch_format0_param, noise_power)
         # harq_bit = p2.pucch_format_1_rec(rxVector, 0, 400, 0, p2.pucch_format1_param, noise_power)
-        cqi_bit = p3.pucch_format_2_rec(rxVector, 0, 400, 100, 0, p3.pucch_format2_param)
-        for n in range(0,p3.pucch_format2_param["cqi_bit_len"]):
+        cqi_bit, snr = p3.pucch_format_2_rec(rxVector, 0, 400, 100, 0, p3.pucch_format2_param, noise_power)
+        for n in range(0,p3.pucch_format2_param["cqi_bit_len"]): # Serializing
             nRxBits.append(cqi_bit[n])
 
  #       if p1.pucch_format0_param["nHarqBit"] == 2:
@@ -148,7 +148,6 @@ for snr_db in range(0, 1, 1):
          #   nRxBits.append(harq_bit[0][0])
         #else:
          #   nRxBits.append(harq_bit[0])
-    print(nRxBits, nTxBits)
 
     bit_error = np.sum(np.abs(nRxBits-nTxBits))/len(nTxBits)
     snr_sweep.append(snr_db)

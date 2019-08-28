@@ -707,7 +707,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         return [harq_bit, snr, dtx]
 
-    def pucch_format_2_rec(self, nGrid, n_sf_u, n_id, n_id_0, n_hop, pucch_format2_param):
+    def pucch_format_2_rec(self, nGrid, n_sf_u, n_id, n_id_0, n_hop, pucch_format2_param, noise_power):
         # Generate Scrambling cSequence
         if pucch_format2_param["cqi_bit_len"] < 3:
             print("PUCCH:pucch_format_2 Invalid no of CQI bits")
@@ -716,13 +716,12 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         l = pucch_format2_param["startSymbolIndex"]
         n_symbol = pucch_format2_param["nrOfSymbols"]
         n_resource_block = pucch_format2_param["nPRB"]
-        n_resource_element = n_resource_block*self.N_sc_rb
         n_pilot_bits = int(n_resource_block*4)*2 # QPSK Bits
-        n_pilot_sym  = (n_resource_block*4)*n_symbol
-        n_data_sym   = (n_resource_block*8)*n_symbol
+        n_pilot_sym = (n_resource_block*4)*n_symbol
+        n_data_sym = (n_resource_block*8)*n_symbol
         startPRB = pucch_format2_param["startPRB"]
-        ref_sym_array = []
 
+        ref_sym_array = []
         if n_symbol == 1:
             c_init = ((2**17)*(14*n_sf_u + l + 1)*(2*n_id_0+1) + 2*n_id_0) % (2**31)
             c_len = n_pilot_bits
@@ -753,33 +752,35 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                 ref_sym_array.append(mod_sym)
 
         # Exract DMRS and Data
-        rec_ref_symbol = []
-        rec_data_symbol = []
-
+        rec_ref_symbol = [0 for x in range(0, n_pilot_sym, 1)]
+        rec_data_symbol = [0 for x in range(0, n_data_sym, 1)]
         if n_symbol == 1:
             dmrs_loc = 0
+            data_loc = 0
             for m in range(0, n_resource_block*self.N_sc_rb,1):
                 if(m % (3*dmrs_loc+1)) == 0 and m !=0:
-                    rec_ref_symbol.append(nGrid[l][startPRB*12 + m])
+                    rec_ref_symbol[dmrs_loc] = nGrid[l][startPRB*12 + m]
                     dmrs_loc += 1
                 else:
-                    rec_data_symbol.append(nGrid[l][startPRB*12 + m])
+                    rec_data_symbol[data_loc] = nGrid[l][startPRB*12 + m]
+                    data_loc +=1
         else: # 2 symbol
             dmrs_loc = 0
+            data_loc = 0
             for m in range(0, n_resource_block*self.N_sc_rb, 1):
                 if(m % (3*dmrs_loc+1)) == 0 and m != 0:
-                    rec_ref_symbol.append(nGrid[l][startPRB*12 + m])
-                    rec_ref_symbol.insert(int(n_pilot_sym/2), nGrid[l+1][startPRB*12 + m])
+                    rec_ref_symbol[dmrs_loc] = nGrid[l][startPRB*12 + m]
+                    rec_ref_symbol[int(dmrs_loc + n_pilot_sym/2)] = nGrid[l+1][startPRB*12 + m]
                     dmrs_loc += 1
                 else:
-                    rec_data_symbol.append(nGrid[l][startPRB*12 + m])
-                    rec_data_symbol.insert(int(n_data_sym/2), nGrid[l+1][startPRB*12 + m])
+                    rec_data_symbol[data_loc] = nGrid[l][startPRB*12 + m]
+                    rec_data_symbol[data_loc + int(n_data_sym/2)] = nGrid[l+1][startPRB*12 + m]
+                    data_loc += 1
 
         channel_est = []
 
-        #Channel Estimation symbol by symbol
-        if n_symbol == 1:
-            channel_est = np.array(rec_ref_symbol)/np.array(ref_sym_array)
+        #Channel Estimation
+        channel_est = np.array(rec_ref_symbol)/np.array(ref_sym_array)
 
         # Equalization
         dmrs_loc = 0
@@ -787,16 +788,17 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         data_est = []
         est = est = channel_est[dmrs_loc]
-        for m in range(0, n_resource_block*self.N_sc_rb, 1):
+        for m in range(0, n_resource_block*self.N_sc_rb*n_symbol, 1):
             if(m % (3*dmrs_loc+1)) == 0 and m != 0:
-                est = channel_est[dmrs_loc]
+                est = np.conj(channel_est[dmrs_loc])
                 dmrs_loc += 1
             else: # data
-                data_estimate = np.array(rec_data_symbol[data_loc])/np.array([est])
+                data_estimate = np.array(rec_data_symbol[data_loc])*est/(np.absolute(est)**2 + np.array(noise_power))
                 data_est.append(data_estimate.real) #soft bits
                 data_est.append(data_estimate.imag) #soft_bits
                 data_loc += 1
 
+        decoded_bit = []
         # Decode  RM decoder
         if pucch_format2_param["cqi_bit_len"] < 3:
             print("PUCCH:pucch_format_2 Invalid no of CQI bits")
@@ -807,12 +809,20 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
             c_seq = 1-2*np.array(self.generate_c_sequence(cinit, c_len))
 
-            for n in range (0,c_len,1):
+            for n in range (0, c_len, 1):
                 data_est[n] = data_est[n]*c_seq[n]
 
             decoded_bit = self.reed_muller_decoder_soft(data_est, pucch_format2_param["cqi_bit_len"])
 
-        return decoded_bit
+        signal_power = 0
+        # Estimating the SNR
+        for n in range(0, n_pilot_sym, 1):
+            signal_power += np.absolute(channel_est[n])**2
+
+        signal_power = signal_power/n_pilot_sym
+        snr = 10*np.log10(signal_power/noise_power)
+
+        return decoded_bit, snr
 
 
 
