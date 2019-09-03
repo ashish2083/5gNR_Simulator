@@ -79,7 +79,7 @@ for snr_db in range(-4, 10, 1):
     print(snr_db)
     for frame in range(0, nFrame, 1):
         nTxGrid = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
-
+    
        # if p1.pucch_format0_param["nHarqBit"] == 2:
         #    p1.pucch_format0_param["harqBit0"] = nTxBits[2*frame]
         #    p1.pucch_format0_param["harqBit1"] = nTxBits[2*frame+1]

@@ -71,6 +71,9 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
     pucch_format_1_i_6_table = [[0], [0, 0], [0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0],
                                 [0, 6, 5, 4, 3, 2, 1]]
+
+    pucch_format_3_dmrs_pos = [[1], [0, 3], [1, 4], [1, 4], [1, 5], [1, 6], [2, 7], [2, 7], [2, 8], [2, 9], [3, 10]]
+
     mcs_one_bit = [0, 6]
     mcs_one_bit_sr = [3, 9]
     mcs_two_bits = [0, 3, 9, 6]
@@ -248,9 +251,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if i == 6:
             w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
 
-        if i == 7:
-            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
-
         [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
                                    pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
 
@@ -291,8 +291,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if i == 6:
             w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
 
-        if i == 7:
-            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
 
         [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
                                    pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
@@ -416,6 +414,61 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                     data_loc += 1
 
         return nGrid
+
+    def pucch_format_3(self, nGrid, n_sf_u, n_id, n_id_0, n_hop, pucch_format3_param):
+        # Generate Scrambling cSequence
+        if pucch_format3_param["cqi_bit_len"] < 3:
+            print("PUCCH:pucch_format_2 Invalid no of CQI bits")
+
+        if pucch_format3_param["cqi_bit_len"] <= 11:
+            coded_bit = self.reed_muller_encoder(pucch_format3_param["cqi_bit"], pucch_format3_param["cqi_bit_len"])
+            c_len = 32
+
+        # TBD Polar Code here
+
+        cinit = pucch_format3_param["n_rnti"]*(2**15) + n_id
+        c_seq = self.generate_c_sequence(cinit, c_len)
+
+        # Scramble
+        scram_bit = (coded_bit + c_seq) % 2
+
+        data_sym_array = []
+        n_mod_sym = 0
+
+        # Modulation QPSK
+        if pucch_format3_param["modBPSK"] == 0:
+            for n in range(0, c_len, 2):
+                mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * scram_bit[n],
+                                               1 - 2 * scram_bit[n+1])  # QPSK
+                data_sym_array.append(mod_sym)
+            n_mod_sym = c_len/2
+        else: # Pi/2 BPSK modulation
+            for n in range(0, c_len, 1):
+                mod_sym = 1 / np.sqrt(2) * cmath.exp(complex(0, math.pi/2 * (i % 2)))*complex(1 - 2 * scram_bit[n],
+                                      1 - 2 * scram_bit[n])  # Pi/2 BPSK
+            n_mod_sym = c_len
+
+        # Block wise spreading
+        n_resource_block = pucch_format3_param["nPRB"]
+        n_resource_element = pucch_format3_param["nPRB"]*self.N_sc_rb
+        l = pucch_format3_param["startSymbolIndex"]
+        n_symbol = pucch_format3_param["nrOfSymbols"]
+        n_resource_element = n_resource_block*self.N_sc_rb
+        n_pilot_bits = int(n_resource_block*4)*2 # QPSK Bits
+        n_pilot_sym  = (n_resource_block*4)*n_symbol
+        n_data_sym   = (n_resource_block*8)*n_symbol
+
+        n_mod_block = n_mod_sym/n_resource_element
+
+        mod_sym_block = np.reshape(mod_sym, n_mod_block, n_resource_element)
+
+        spreaded_sym = (1/sqrt(n_resource_element))*np.fft.fft(mod_sym_block)
+
+        spreaded_sym = spreaded_sym.flatten() # DFT spreaded Modulation symbol
+
+        # Generating Reference Signal
+
+
 
     def pucch_format_0_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format0_param, noise_power):
 
@@ -598,9 +651,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if i == 6:
             w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
 
-        if i == 7:
-            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
-
         [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
                                    pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
 
@@ -641,8 +691,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if i == 6:
             w_i = self.pucch_format_1_i_6_table[n_pucch_1_sf_m_dash - 1]
 
-        if i == 7:
-            w_i = self.pucch_format_1_i_7_table[n_pucch_1_sf_m_dash - 1]
 
         [u, v] = self.generate_u_v(pucch_format1_param["pucchGroupHopping"],
                                    pucch_format1_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
@@ -816,6 +864,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         signal_power = 0
         # Estimating the SNR
+
         for n in range(0, n_pilot_sym, 1):
             signal_power += np.absolute(channel_est[n])**2
 
