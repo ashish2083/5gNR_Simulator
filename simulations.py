@@ -32,6 +32,7 @@ nFrameGrid = []
 p1 = pucch.pucch() # Format 0
 p2 = pucch.pucch() # Format 1
 p3 = pucch.pucch() # Format 2
+p4 = pucch.pucch() # Format 3
 
 p1.pucch_format0_param["pucchGroupHopping"] = 'neither'
 p1.pucch_format0_param["pucchFrequencyHopping"] = 'disable'
@@ -66,6 +67,19 @@ p3.pucch_format2_param["n_rnti"] = 100
 p3.pucch_format2_param["cqi_bit_len"] = 6
 p3.pucch_format2_param["cqi_bit"] = 0
 
+
+
+p2.pucch_format3_param["pucchGroupHopping"] = 'neither'
+p2.pucch_format3_param["pucchFrequencyHopping"] = 'disable'
+p4.pucch_format3_param["startSymbolIndex"] = 0
+p4.pucch_format3_param["nrOfSymbols"] = 1 # 1,2 Only
+p4.pucch_format3_param["nPRB"] = 2 # RM code only
+p4.pucch_format3_param["startPRB"] = 0 # RM code only
+p4.pucch_format3_param["n_rnti"] = 100
+p4.pucch_format3_param["cqi_bit_len"] = 6
+p4.pucch_format3_param["cqi_bit"] = 0
+p4.pucch_format3_param["modBPSK"] = 0
+
 #nTxBits = np.random.randint(0, 2, nFrame*p1.pucch_format0_param["nHarqBit"])
 #nTxBits = np.random.randint(0, 2, nFrame*p2.pucch_format1_param["nHarqBit"])
 nTxBits = np.random.randint(0, 2, nFrame*p3.pucch_format2_param["cqi_bit_len"])
@@ -79,7 +93,7 @@ for snr_db in range(-4, 10, 1):
     print(snr_db)
     for frame in range(0, nFrame, 1):
         nTxGrid = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
-    
+
        # if p1.pucch_format0_param["nHarqBit"] == 2:
         #    p1.pucch_format0_param["harqBit0"] = nTxBits[2*frame]
         #    p1.pucch_format0_param["harqBit1"] = nTxBits[2*frame+1]
@@ -96,14 +110,20 @@ for snr_db in range(-4, 10, 1):
         #else:
          #   p2.pucch_format1_param["harqBit0"] = nTxBits[frame]
 
-        cqi_bit_start = frame*p3.pucch_format2_param["cqi_bit_len"]
-        cqi_bit_stop = (frame+1)*p3.pucch_format2_param["cqi_bit_len"]
-        p3.pucch_format2_param["cqi_bit"] = nTxBits[cqi_bit_start:cqi_bit_stop]
+        #cqi_bit_start = frame*p3.pucch_format2_param["cqi_bit_len"]
+        #cqi_bit_stop = (frame+1)*p3.pucch_format2_param["cqi_bit_len"]
+        #p3.pucch_format2_param["cqi_bit"] = nTxBits[cqi_bit_start:cqi_bit_stop]
+
+        cqi_bit_start = frame*p3.pucch_format3_param["cqi_bit_len"]
+        cqi_bit_stop = (frame+1)*p3.pucch_format3_param["cqi_bit_len"]
+        p3.pucch_format3_param["cqi_bit"] = nTxBits[cqi_bit_start:cqi_bit_stop]
+
         # Create Gird #
         #txGrid = p1.pucch_format_0(nTxGrid, 0, 400, 0, p1.pucch_format0_param)
         #txGrid = p2.pucch_format_1(nTxGrid, 0, 400, 0, p2.pucch_format1_param)
-        txGrid = p3.pucch_format_2(nTxGrid, 0, 400, 100, 0, p3.pucch_format2_param)
-
+        #txGrid = p3.pucch_format_2(nTxGrid, 0, 400, 100, 0, p3.pucch_format2_param)
+        txGrid = p4.pucch_format_3(nTxGrid, 0, 400, 100, 0, p3.pucch_format3_param)
+        np.abs()
         txVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
         for n in range(0, num_slot_sym, 1):
             txVector[n] = np.fft.ifft(txGrid[n])*np.sqrt(fft_size)

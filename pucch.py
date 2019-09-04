@@ -81,6 +81,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
     N_sc_rb = 12
 
     pucch_format0_param = {"pucchGroupHopping": 'neither',
+                           "pucchFrequencyHopping": 'disable',
                            "initialCyclicShift": -1,
                            "nrOfSymbols": -1,
                            "startSymbolIndex": -1,
@@ -92,6 +93,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                            "nHopPRB": -1
                            }
     pucch_format1_param = {"pucchGroupHopping": 'neither',
+                           "pucchFrequencyHopping": 'disable',
                            "initialCyclicShift": -1,
                            "nrOfSymbols": -1,
                            "startSymbolIndex": -1,
@@ -108,6 +110,18 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                            "n_rnti": -1,
                            "cqi_bit_len": -1,
                            "cqi_bit": -1
+                          }
+
+    pucch_format3_param = {"pucchGroupHopping": 'neither',
+                           "pucchFrequencyHopping": 'disable',
+                           "startSymbolIndex": -1,
+                           "nrOfSymbols": -1,
+                           "nPRB": -1,
+                           "startPRB": -1,
+                           "n_rnti": -1,
+                           "cqi_bit_len": -1,
+                           "cqi_bit": -1,
+                           "modBPSK": -1
                           }
 
     def generate_u_v(self, pucchGroupHopping, pucchFrequencyHopping, n_id, n_sf_u, n_hop):
@@ -142,7 +156,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         c_seq = self.generate_c_sequence(c_init, c_len)
         c_seq = c_seq[-8:]
         ncs_n_sf_u_l = self.cinit_calc(c_seq, 8)
-        cyclic_shift = 2*cmath.pi/12*((m_o + m_cs + ncs_n_sf_u_l) % 12)
+        cyclic_shift = 2*cmath.pi/12*((m_o + m_cs + ncs_n_sf_u_l) % self.N_sc_rb)
         return cyclic_shift
 
     def pucch_format_0(self, nGrid, n_sf_u, n_id, n_hop, pucch_format0_param):
@@ -184,7 +198,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
             [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
             cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, m_cs, n_id)
-            cyclic_shift_sym_1 = self.cyclic_shift_ncs(n_sf_u, l+1, 0, m_o, m_cs, n_id)
+            cyclic_shift_sym_1 = self.cyclic_shift_ncs(n_sf_u, l, 1, m_o, m_cs, n_id)
             r_u_v_c_alpha_sym_0 = self.reference_seq(u, v, cyclic_shift_sym_0, 1, 0)
             r_u_v_c_alpha_sym_1 = self.reference_seq(u, v, cyclic_shift_sym_1, 1, 0)
 
@@ -203,7 +217,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         elif pucch_format0_param["nrOfSymbols"] == 2:
 
             for n in range(0, 12, 1):
-
                 nGrid[startSymbolIndex][startPRB*12 + n] = r_u_v_c_alpha_sym_0[n]
                 nGrid[startSymbolIndex+1][startPRB*12 + n] = r_u_v_c_alpha_sym_1[n]
 
@@ -257,7 +270,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         dmrs_sequence = []
         for n in range(0, n_pucch_1_sf_m_dash, 1):
             m_o = pucch_format1_param["initialCyclicShift"]
-            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l+n*2), 0, m_o, 0, n_id)
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, n*2, m_o, 0, n_id)
             r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
             seq_mult = cmath.exp(complex(0, 2*math.pi * w_i[n]/n_dmrs_symbol))
             dmrs_sequence = np.r_[dmrs_sequence, np.dot(seq_mult, r_u_v_c_alpha_seq)]
@@ -299,7 +312,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         for n in range(0, n_pucch_1_sf_m_dash, 1):
             m_o = pucch_format1_param["initialCyclicShift"]
-            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l + n * 2 + 1), 0, m_o, 0, n_id)
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, n * 2 + 1, m_o, 0, n_id)
             r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
             spread_coefficient = mod_sym*cmath.exp(complex(0, 2 * math.pi * w_i[n] / n_data_symbol))
             data_sequence = np.r_[data_sequence, np.dot(spread_coefficient, r_u_v_c_alpha_seq)]
@@ -310,13 +323,13 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         # DMRS
         for n in range(0, n_dmrs_symbol, 1):
             for m in range(0, self.N_sc_rb):
-                nGrid[l+2*n][startPRB*12 + m] = dmrs_sequence[n*self.N_sc_rb +m]
+                nGrid[l+2*n][startPRB*self.N_sc_rb + m] = dmrs_sequence[n*self.N_sc_rb +m]
 
         # Data
 
         for n in range(0, n_data_symbol, 1):
             for m in range(0, self.N_sc_rb):
-                nGrid[l + (2*n)+1][startPRB * 12 + m] = data_sequence[n * self.N_sc_rb + m]
+                nGrid[l + (2*n)+1][startPRB*self.N_sc_rb + m] = data_sequence[n * self.N_sc_rb + m]
 
         return nGrid
 
@@ -443,15 +456,16 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                 data_sym_array.append(mod_sym)
             n_mod_sym = c_len/2
         else: # Pi/2 BPSK modulation
-            for n in range(0, c_len, 1):
-                mod_sym = 1 / np.sqrt(2) * cmath.exp(complex(0, math.pi/2 * (i % 2)))*complex(1 - 2 * scram_bit[n],
-                                      1 - 2 * scram_bit[n])  # Pi/2 BPSK
+            for i in range(0, c_len, 1):
+                mod_sym = 1 / np.sqrt(2) * cmath.exp(complex(0, math.pi/2 * (i % 2)))*complex(1 - 2 * scram_bit[i],
+                                      1 - 2 * scram_bit[i])  # Pi/2 BPSK
             n_mod_sym = c_len
 
         # Block wise spreading
         n_resource_block = pucch_format3_param["nPRB"]
         n_resource_element = pucch_format3_param["nPRB"]*self.N_sc_rb
         l = pucch_format3_param["startSymbolIndex"]
+        startPRB = pucch_format3_param["startPRB"]
         n_symbol = pucch_format3_param["nrOfSymbols"]
         n_resource_element = n_resource_block*self.N_sc_rb
         n_pilot_bits = int(n_resource_block*4)*2 # QPSK Bits
@@ -460,14 +474,42 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         n_mod_block = n_mod_sym/n_resource_element
 
-        mod_sym_block = np.reshape(mod_sym, n_mod_block, n_resource_element)
+        print(len(data_sym_array), n_mod_sym, n_mod_block, n_resource_element)
 
-        spreaded_sym = (1/sqrt(n_resource_element))*np.fft.fft(mod_sym_block)
+        abs()
+        mod_sym_block = np.reshape(np.array(data_sym_array), n_mod_block, n_resource_element)
+
+        print(mod_sym_block)
+
+        abs()
+        spreaded_sym = (1/np.sqrt(n_resource_element))*np.fft.fft(mod_sym_block)
 
         spreaded_sym = spreaded_sym.flatten() # DFT spreaded Modulation symbol
 
         # Generating Reference Signal
+        n_ref_sym = len(self.pucch_format_3_dmrs_pos[n_symbol-4])
 
+        n_data_sym = n_symbol-n_ref_sym
+
+        for n_sym in range(0, n_ref_sym, 1):
+            # Generate Reference Signal
+            m_o = 0
+            [u, v] = self.generate_u_v(pucch_format3_param["pucchGroupHopping"], pucch_format3_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, n_sym, m_o, 0, n_id)
+            r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, n_resource_block, 0)
+
+            # Map onto grid
+            for m in range(0, self.N_sc_rb):
+                nGrid[l + self.pucch_format_3_dmrs_pos[n_symbol-4][n_sym]][startPRB*self.N_sc_rb + m] = r_u_v_c_alpha_seq[m]
+
+
+        # Mapping Data
+        for n_sym in range(0, n_symbol, 1):
+             if n_sym not in self.pucch_format_3_dmrs_pos[n_symbol-4]:
+                  for m in range(0, self.N_sc_rb):
+                     nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = r_u_v_c_alpha_seq[m]
+
+        return nGrid
 
 
     def pucch_format_0_rec(self, nGrid, n_sf_u, n_id, n_hop, pucch_format0_param, noise_power):
@@ -492,7 +534,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         elif pucch_format0_param["nrOfSymbols"] == 2:
             [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
             cyclic_shift_sym_0 = self.cyclic_shift_ncs(n_sf_u, l, 0, m_o, 0, n_id)
-            cyclic_shift_sym_1 = self.cyclic_shift_ncs(n_sf_u, l+1, 0, m_o, 0, n_id)
+            cyclic_shift_sym_1 = self.cyclic_shift_ncs(n_sf_u, l, 1, m_o, 0, n_id)
             r_u_v_c_alpha_sym_0 = self.reference_seq(u, v, cyclic_shift_sym_0, 1, 0)
             r_u_v_c_alpha_sym_1 = self.reference_seq(u, v, cyclic_shift_sym_1, 1, 0)
 
@@ -657,7 +699,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         dmrs_sequence = []
         for n in range(0, n_pucch_1_sf_m_dash, 1):
             m_o = pucch_format1_param["initialCyclicShift"]
-            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l + n * 2), 0, m_o, 0, n_id)
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, n*2, m_o, 0, n_id)
             r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
             seq_mult = cmath.exp(complex(0, 2 * math.pi * w_i[n] / n_dmrs_symbol))
             dmrs_sequence = np.r_[dmrs_sequence, np.dot(seq_mult, r_u_v_c_alpha_seq)]
@@ -698,7 +740,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         data_sequence = []
         for n in range(0, n_pucch_1_sf_m_dash, 1):
             m_o = pucch_format1_param["initialCyclicShift"]
-            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, (l + n * 2 + 1), 0, m_o, 0, n_id)
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, n*2+1, m_o, 0, n_id)
             r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, 1, 0)
             spread_coefficient = cmath.exp(complex(0, 2 * math.pi * w_i[n] / n_data_symbol))
             data_sequence = np.r_[data_sequence, np.dot(spread_coefficient, r_u_v_c_alpha_seq)]
