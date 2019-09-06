@@ -25,7 +25,7 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 500      # Frame to simulate
+nFrame = 4      # Frame to simulate
 
 nFrameGrid = []
 
@@ -60,7 +60,7 @@ p2.pucch_format1_param["nHopPRB"] = 20
 p2.pucch_format1_param["spread_seq_idx"] = 1
 
 p3.pucch_format2_param["startSymbolIndex"] = 0
-p3.pucch_format2_param["nrOfSymbols"] = 1 # 1,2 Only
+p3.pucch_format2_param["nrOfSymbols"] = 2 # 1,2 Only
 p3.pucch_format2_param["nPRB"] = 2 # RM code only
 p3.pucch_format2_param["startPRB"] = 0 # RM code only
 p3.pucch_format2_param["n_rnti"] = 100
@@ -69,8 +69,8 @@ p3.pucch_format2_param["cqi_bit"] = 0
 
 
 
-p2.pucch_format3_param["pucchGroupHopping"] = 'neither'
-p2.pucch_format3_param["pucchFrequencyHopping"] = 'disable'
+p4.pucch_format3_param["pucchGroupHopping"] = 'neither'
+p4.pucch_format3_param["pucchFrequencyHopping"] = 'disable'
 p4.pucch_format3_param["startSymbolIndex"] = 0
 p4.pucch_format3_param["nrOfSymbols"] = 4 # 1,2 Only
 p4.pucch_format3_param["nPRB"] = 1 # RM code only
@@ -110,20 +110,19 @@ for snr_db in range(-4, 10, 1):
         #else:
          #   p2.pucch_format1_param["harqBit0"] = nTxBits[frame]
 
-        #cqi_bit_start = frame*p3.pucch_format2_param["cqi_bit_len"]
-        #cqi_bit_stop = (frame+1)*p3.pucch_format2_param["cqi_bit_len"]
-        #p3.pucch_format2_param["cqi_bit"] = nTxBits[cqi_bit_start:cqi_bit_stop]
+        cqi_bit_start = frame*p3.pucch_format2_param["cqi_bit_len"]
+        cqi_bit_stop = (frame+1)*p3.pucch_format2_param["cqi_bit_len"]
+        p3.pucch_format2_param["cqi_bit"] = nTxBits[cqi_bit_start:cqi_bit_stop]
 
-        cqi_bit_start = frame*p3.pucch_format3_param["cqi_bit_len"]
-        cqi_bit_stop = (frame+1)*p3.pucch_format3_param["cqi_bit_len"]
-        p3.pucch_format3_param["cqi_bit"] = nTxBits[cqi_bit_start:cqi_bit_stop]
+        #cqi_bit_start = frame*p4.pucch_format3_param["cqi_bit_len"]
+        #cqi_bit_stop = (frame+1)*p4.pucch_format3_param["cqi_bit_len"]
+        #p4.pucch_format3_param["cqi_bit"] = nTxBits[cqi_bit_start:cqi_bit_stop]
 
         # Create Gird #
         #txGrid = p1.pucch_format_0(nTxGrid, 0, 400, 0, p1.pucch_format0_param)
         #txGrid = p2.pucch_format_1(nTxGrid, 0, 400, 0, p2.pucch_format1_param)
-        #txGrid = p3.pucch_format_2(nTxGrid, 0, 400, 100, 0, p3.pucch_format2_param)
-        txGrid = p4.pucch_format_3(nTxGrid, 0, 400, 100, 0, p3.pucch_format3_param)
-        np.abs()
+        txGrid = p3.pucch_format_2(nTxGrid, 0, 400, 100, 0, p3.pucch_format2_param)
+        #txGrid = p4.pucch_format_3(nTxGrid, 0, 400, 100, 0, p4.pucch_format3_param)
         txVector = [[complex(0, 0) for x in range(fft_size)] for x in range(num_slot_sym)]
         for n in range(0, num_slot_sym, 1):
             txVector[n] = np.fft.ifft(txGrid[n])*np.sqrt(fft_size)

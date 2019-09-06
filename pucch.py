@@ -338,34 +338,45 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if pucch_format2_param["cqi_bit_len"] < 3:
             print("PUCCH:pucch_format_2 Invalid no of CQI bits")
 
-        if pucch_format2_param["cqi_bit_len"] <= 11:
-            coded_bit = self.reed_muller_encoder(pucch_format2_param["cqi_bit"], pucch_format2_param["cqi_bit_len"])
-            c_len = 32
-
-        # TBD Polar Code here
-
-        cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
-        c_seq = self.generate_c_sequence(cinit, c_len)
-
-        # Scramble
-        scram_bit = (coded_bit + c_seq) % 2
-
-        data_sym_array = []
-
-        # Modulation QPSK
-        for n in range(0, c_len, 2):
-            mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * scram_bit[n],
-                                               1 - 2 * scram_bit[n+1])  # QPSK
-            data_sym_array.append(mod_sym)
-
-        # Generating Reference Signal
         l = pucch_format2_param["startSymbolIndex"]
         n_symbol = pucch_format2_param["nrOfSymbols"]
         n_resource_block = pucch_format2_param["nPRB"]
         n_resource_element = n_resource_block*self.N_sc_rb
         n_pilot_bits = int(n_resource_block*4)*2 # QPSK Bits
-        n_pilot_sym  = (n_resource_block*4)*n_symbol
-        n_data_sym   = (n_resource_block*8)*n_symbol
+        n_pilot_sym = (n_resource_block*4)*n_symbol
+        n_data_sym = (n_resource_block*8)*n_symbol
+
+        if pucch_format2_param["cqi_bit_len"] <= 11:
+            coded_bit = self.reed_muller_encoder(pucch_format2_param["cqi_bit"], pucch_format2_param["cqi_bit_len"])
+            c_len = 32
+
+            # Rate Matching
+            E_tot = 16*n_symbol*n_resource_block # Only considering short Block Length
+            rate_matched_bit = []
+
+            for k in range(0, E_tot, 1):
+                index = k%c_len
+                rate_matched_bit.append(coded_bit[index])
+
+
+        # TBD Polar Code here
+
+        cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
+        c_seq = self.generate_c_sequence(cinit, E_tot)
+
+        # Scramble
+        scram_bit = [(rate_matched_bit[n] + c_seq[n]) % 2 for n in range(0, E_tot, 1)]
+
+        data_sym_array = []
+
+        # Modulation QPSK
+        for n in range(0, E_tot, 2):
+            mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * scram_bit[n],
+                                               1 - 2 * scram_bit[n+1])  # QPSK
+            data_sym_array.append(mod_sym)
+
+        # Generating Reference Signal
+
         ref_sym_array = []
 
         if n_symbol == 1:
@@ -461,7 +472,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         # Scramble
         scram_bit = [(rate_matched_bit[n] + c_seq[n]) % 2 for n in range(0, E_tot, 1)]
 
-
         data_sym_array = []
         n_mod_sym = 0
 
@@ -510,7 +520,6 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
              if n_sym not in self.pucch_format_3_dmrs_pos[n_symbol-4]:
                   for m in range(0, self.N_sc_rb):
                      nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = spreaded_sym[m]
-             print(nGrid[l+n_sym][startPRB*self.N_sc_rb+ 0:11])
 
         return nGrid
 
@@ -897,15 +906,24 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             print("PUCCH:pucch_format_2 Invalid no of CQI bits")
 
         if pucch_format2_param["cqi_bit_len"] <= 11:
-            # Descrambling
-            c_len = 32
-            cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
-            c_seq = 1-2*np.array(self.generate_c_sequence(cinit, c_len))
 
-            for n in range (0, c_len, 1):
+            # De Rate Matching
+            c_len = 32
+            E_tot = 16*n_symbol*n_resource_block # Only considering short Block Length
+
+            # Descrambling
+            cinit = pucch_format2_param["n_rnti"]*(2**15) + n_id
+            c_seq = 1-2*np.array(self.generate_c_sequence(cinit, E_tot))
+
+            for n in range (0, E_tot, 1):
                 data_est[n] = data_est[n]*c_seq[n]
 
-            decoded_bit = self.reed_muller_decoder_soft(data_est, pucch_format2_param["cqi_bit_len"])
+
+            for n in range(0,E_tot-c_len,1):
+                index = n%c_len
+                data_est[index] = data_est[index] + data_est[n+c_len]
+
+            decoded_bit = self.reed_muller_decoder_soft(data_est[0:32], pucch_format2_param["cqi_bit_len"])
 
         signal_power = 0
         # Estimating the SNR
