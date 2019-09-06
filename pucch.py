@@ -433,64 +433,67 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if pucch_format3_param["cqi_bit_len"] < 3:
             print("PUCCH:pucch_format_2 Invalid no of CQI bits")
 
+        n_symbol = pucch_format3_param["nrOfSymbols"]
+        n_resource_block = pucch_format3_param["nPRB"]
+        n_ref_sym = len(self.pucch_format_3_dmrs_pos[n_symbol-4])
+        n_data_sym = n_symbol - n_ref_sym
+
         if pucch_format3_param["cqi_bit_len"] <= 11:
             coded_bit = self.reed_muller_encoder(pucch_format3_param["cqi_bit"], pucch_format3_param["cqi_bit_len"])
             c_len = 32
 
+            # Rate Matching
+            if pucch_format3_param["modBPSK"] == 0: # QPSK
+                E_tot = 24*n_data_sym*n_resource_block # Considering only the UCI case. Encoding shall ideally happen in MAC
+            else: # Pi/2 BPSK
+                E_tot = 12*n_data_sym*n_resource_block
+
+            rate_matched_bit = []
+            for k in range(0, E_tot, 1):
+                index = k%c_len
+                rate_matched_bit.append(coded_bit[index])
+
         # TBD Polar Code here
 
         cinit = pucch_format3_param["n_rnti"]*(2**15) + n_id
-        c_seq = self.generate_c_sequence(cinit, c_len)
+        c_seq = self.generate_c_sequence(cinit, E_tot)
 
         # Scramble
-        scram_bit = (coded_bit + c_seq) % 2
+        scram_bit = [(rate_matched_bit[n] + c_seq[n]) % 2 for n in range(0, E_tot, 1)]
+
 
         data_sym_array = []
         n_mod_sym = 0
 
         # Modulation QPSK
         if pucch_format3_param["modBPSK"] == 0:
-            for n in range(0, c_len, 2):
+            for n in range(0, E_tot, 2):
                 mod_sym = 1 / np.sqrt(2) * complex(1 - 2 * scram_bit[n],
                                                1 - 2 * scram_bit[n+1])  # QPSK
                 data_sym_array.append(mod_sym)
-            n_mod_sym = c_len/2
+            n_mod_sym = E_tot/2
         else: # Pi/2 BPSK modulation
-            for i in range(0, c_len, 1):
+            for i in range(0, E_tot, 1):
                 mod_sym = 1 / np.sqrt(2) * cmath.exp(complex(0, math.pi/2 * (i % 2)))*complex(1 - 2 * scram_bit[i],
                                       1 - 2 * scram_bit[i])  # Pi/2 BPSK
-            n_mod_sym = c_len
+                data_sym_array.append(mod_sym)
+            n_mod_sym = E_tot
 
         # Block wise spreading
-        n_resource_block = pucch_format3_param["nPRB"]
         n_resource_element = pucch_format3_param["nPRB"]*self.N_sc_rb
-        l = pucch_format3_param["startSymbolIndex"]
         startPRB = pucch_format3_param["startPRB"]
-        n_symbol = pucch_format3_param["nrOfSymbols"]
+        l = pucch_format3_param["startSymbolIndex"]
         n_resource_element = n_resource_block*self.N_sc_rb
-        n_pilot_bits = int(n_resource_block*4)*2 # QPSK Bits
-        n_pilot_sym  = (n_resource_block*4)*n_symbol
-        n_data_sym   = (n_resource_block*8)*n_symbol
 
-        n_mod_block = n_mod_sym/n_resource_element
+        n_mod_block = int(n_mod_sym//n_resource_element)
 
-        print(len(data_sym_array), n_mod_sym, n_mod_block, n_resource_element)
+        data_sym_array = np.reshape(np.array(data_sym_array), (n_mod_block, n_resource_element))
 
-        abs()
-        mod_sym_block = np.reshape(np.array(data_sym_array), n_mod_block, n_resource_element)
-
-        print(mod_sym_block)
-
-        abs()
-        spreaded_sym = (1/np.sqrt(n_resource_element))*np.fft.fft(mod_sym_block)
+        spreaded_sym = (1/np.sqrt(n_resource_element))*np.fft.fft(data_sym_array)
 
         spreaded_sym = spreaded_sym.flatten() # DFT spreaded Modulation symbol
 
         # Generating Reference Signal
-        n_ref_sym = len(self.pucch_format_3_dmrs_pos[n_symbol-4])
-
-        n_data_sym = n_symbol-n_ref_sym
-
         for n_sym in range(0, n_ref_sym, 1):
             # Generate Reference Signal
             m_o = 0
@@ -502,12 +505,12 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             for m in range(0, self.N_sc_rb):
                 nGrid[l + self.pucch_format_3_dmrs_pos[n_symbol-4][n_sym]][startPRB*self.N_sc_rb + m] = r_u_v_c_alpha_seq[m]
 
-
         # Mapping Data
         for n_sym in range(0, n_symbol, 1):
              if n_sym not in self.pucch_format_3_dmrs_pos[n_symbol-4]:
                   for m in range(0, self.N_sc_rb):
-                     nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = r_u_v_c_alpha_seq[m]
+                     nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = spreaded_sym[m]
+             print(nGrid[l+n_sym][startPRB*self.N_sc_rb+ 0:11])
 
         return nGrid
 
