@@ -489,6 +489,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                 data_sym_array.append(mod_sym)
             n_mod_sym = E_tot
 
+
         # Block wise spreading
         n_resource_element = pucch_format3_param["nPRB"]*self.N_sc_rb
         startPRB = pucch_format3_param["startPRB"]
@@ -501,14 +502,13 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         spreaded_sym = (1/np.sqrt(n_resource_element))*np.fft.fft(data_sym_array)
 
-        spreaded_sym = spreaded_sym.flatten() # DFT spreaded Modulation symbol
-
         # Generating Reference Signal
         for n_sym in range(0, n_ref_sym, 1):
             # Generate Reference Signal
             m_o = 0
+            ref_sig_loc = self.pucch_format_3_dmrs_pos[n_symbol-4][n_sym]
             [u, v] = self.generate_u_v(pucch_format3_param["pucchGroupHopping"], pucch_format3_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
-            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, n_sym, m_o, 0, n_id)
+            cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, ref_sig_loc, m_o, 0, n_id)
             r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, n_resource_block, 0)
 
             # Map onto grid
@@ -516,10 +516,13 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                 nGrid[l + self.pucch_format_3_dmrs_pos[n_symbol-4][n_sym]][startPRB*self.N_sc_rb + m] = r_u_v_c_alpha_seq[m]
 
         # Mapping Data
+        data_loc = 0
         for n_sym in range(0, n_symbol, 1):
              if n_sym not in self.pucch_format_3_dmrs_pos[n_symbol-4]:
                   for m in range(0, self.N_sc_rb):
-                     nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = spreaded_sym[m]
+                     nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = spreaded_sym[data_loc][m]
+
+                  data_loc +=1
 
         return nGrid
 
@@ -936,5 +939,86 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         return decoded_bit, snr
 
+    def pucch_format_3_rec(self, nGrid, n_sf_u, n_id, n_id_0, n_hop, pucch_format3_param, noise_power):
+
+        # Generate Scrambling cSequence
+        if pucch_format3_param["cqi_bit_len"] < 3:
+            print("PUCCH:pucch_format_2 Invalid no of CQI bits")
+
+        n_resource_block = pucch_format3_param["nPRB"]
+        startPRB = pucch_format3_param["startPRB"]
+        l = pucch_format3_param["startSymbolIndex"]
+        n_symbol = pucch_format3_param["nrOfSymbols"]
+        n_ref_sym = len(self.pucch_format_3_dmrs_pos[n_symbol-4])
+        n_data_sym = n_symbol - n_ref_sym
+        n_resource_element = n_resource_block*self.N_sc_rb
+
+        # Generating Reference Signal for channel estimation And Equalization at the same time
+        ref_loc  = 0
+        data_loc = 0
 
 
+        # Generate Initial Channel Estiamte
+        m_o = 0
+        first_ref_loc =  self.pucch_format_3_dmrs_pos[n_symbol-4][ref_loc]
+        [u, v] = self.generate_u_v(pucch_format3_param["pucchGroupHopping"], pucch_format3_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
+        cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, first_ref_loc, m_o, 0, n_id)
+        r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, n_resource_block, 0)
+        ref_sym = nGrid[l + first_ref_loc][startPRB*self.N_sc_rb + 0:n_resource_block*self.N_sc_rb]
+
+        channel_estimate = ref_sym*np.conj(r_u_v_c_alpha_seq)
+
+        eq_data_sym = []
+        sig_power = 0
+
+        # Equalization
+        for n_sym in range(0, n_symbol, 1):
+            if n_sym == self.pucch_format_3_dmrs_pos[n_symbol-4][ref_loc%n_ref_sym]:
+                if n_sym != first_ref_loc:
+                    m_o = 0
+                    cyclic_shift_sym = self.cyclic_shift_ncs(n_sf_u, l, self.pucch_format_3_dmrs_pos[n_symbol-4][ref_loc], m_o, 0, n_id)
+                    r_u_v_c_alpha_seq = self.reference_seq(u, v, cyclic_shift_sym, n_resource_block, 0)
+                    ref_sym = nGrid[l + self.pucch_format_3_dmrs_pos[n_symbol-4][ref_loc]][startPRB*self.N_sc_rb + 0:n_resource_block*self.N_sc_rb]
+                    channel_estimate = ref_sym*np.conj(r_u_v_c_alpha_seq)
+                ref_loc += 1
+
+                # Signal power averaged over reference RE
+                sig_power += np.sum(np.absolute(channel_estimate)**2)/n_resource_block/self.N_sc_rb/n_ref_sym
+
+            else:  # Equalization
+                data_sym = nGrid[l + n_sym][startPRB*self.N_sc_rb + 0:n_resource_block*self.N_sc_rb]
+                eq_sym =   data_sym*np.conj(channel_estimate)/(np.absolute(channel_estimate)**2 + np.array(noise_power))
+                eq_sym =  (np.sqrt(n_resource_element))*np.fft.ifft(eq_sym) # Despreading
+
+                if pucch_format3_param["modBPSK"] == 0:
+                    for n in range(0, n_resource_block*self.N_sc_rb, 1):
+                        eq_data_sym.append(eq_sym[n].real)
+                        eq_data_sym.append(eq_sym[n].imag)
+
+
+        # Decode  RM decoder
+        if pucch_format3_param["cqi_bit_len"] <= 11:
+            if pucch_format3_param["modBPSK"] == 0: # QPSK
+                E_tot = 24*n_data_sym*n_resource_block # Considering only the UCI case. Encoding shall ideally happen in MAC
+            else: # Pi/2 BPSK
+                E_tot = 12*n_data_sym*n_resource_block
+
+            # Descrambling
+            cinit = pucch_format3_param["n_rnti"]*(2**15) + n_id
+            c_seq = 1-2*np.array(self.generate_c_sequence(cinit, E_tot))
+
+            for n in range (0, E_tot, 1):
+                eq_data_sym[n] = eq_data_sym[n]*c_seq[n]
+
+            c_len = 32 #For Reed Muller Short block encoder
+            for n in range(0,E_tot-c_len,1):
+                index = n%c_len
+                eq_data_sym[index] = eq_data_sym[index] + eq_data_sym[n+c_len]
+
+            decoded_bit = self.reed_muller_decoder_soft(eq_data_sym[0:32], pucch_format3_param["cqi_bit_len"])
+        else:
+            print("Not Implemented")
+
+        snr = 10*np.log10(sig_power/noise_power)
+
+        return decoded_bit, snr
