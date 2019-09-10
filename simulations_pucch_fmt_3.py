@@ -25,7 +25,7 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 500      # Frame to simulate
+nFrame = 5      # Frame to simulate
 
 nFrameGrid = []
 
@@ -40,7 +40,7 @@ p4.pucch_format3_param["startPRB"] = 0 # RM code only
 p4.pucch_format3_param["n_rnti"] = 100
 p4.pucch_format3_param["cqi_bit_len"] = 6
 p4.pucch_format3_param["cqi_bit"] = 0
-p4.pucch_format3_param["modBPSK"] = 0
+p4.pucch_format3_param["modBPSK"] = 1
 
 nTxBits = np.random.randint(0, 2, nFrame*p4.pucch_format3_param["cqi_bit_len"])
 

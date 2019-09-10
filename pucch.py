@@ -484,11 +484,10 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             n_mod_sym = E_tot/2
         else: # Pi/2 BPSK modulation
             for i in range(0, E_tot, 1):
-                mod_sym = 1 / np.sqrt(2) * cmath.exp(complex(0, math.pi/2 * (i % 2)))*complex(1 - 2 * scram_bit[i],
+                mod_sym = 1 / np.sqrt(2) * cmath.exp(complex(0, cmath.pi/2 * (i % 2)))*complex(1 - 2 * scram_bit[i],
                                       1 - 2 * scram_bit[i])  # Pi/2 BPSK
                 data_sym_array.append(mod_sym)
             n_mod_sym = E_tot
-
 
         # Block wise spreading
         n_resource_element = pucch_format3_param["nPRB"]*self.N_sc_rb
@@ -518,11 +517,11 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         # Mapping Data
         data_loc = 0
         for n_sym in range(0, n_symbol, 1):
-             if n_sym not in self.pucch_format_3_dmrs_pos[n_symbol-4]:
-                  for m in range(0, self.N_sc_rb):
-                     nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = spreaded_sym[data_loc][m]
+            if n_sym not in self.pucch_format_3_dmrs_pos[n_symbol-4]:
+                for m in range(0, self.N_sc_rb):
+                    nGrid[l+n_sym][startPRB*self.N_sc_rb + m] = spreaded_sym[data_loc][m]
 
-                  data_loc +=1
+                data_loc += 1
 
         return nGrid
 
@@ -970,7 +969,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         eq_data_sym = []
         sig_power = 0
-
+        residual_phase = 0
         # Equalization
         for n_sym in range(0, n_symbol, 1):
             if n_sym == self.pucch_format_3_dmrs_pos[n_symbol-4][ref_loc%n_ref_sym]:
@@ -987,31 +986,39 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
             else:  # Equalization
                 data_sym = nGrid[l + n_sym][startPRB*self.N_sc_rb + 0:n_resource_block*self.N_sc_rb]
-                eq_sym =   data_sym*np.conj(channel_estimate)/(np.absolute(channel_estimate)**2 + np.array(noise_power))
-                eq_sym =  (np.sqrt(n_resource_element))*np.fft.ifft(eq_sym) # Despreading
+                eq_sym = data_sym*np.conj(channel_estimate)/(np.absolute(channel_estimate)**2 + np.array(noise_power))
+                eq_sym = (np.sqrt(n_resource_element))*np.fft.ifft(eq_sym) # Despreading
 
                 if pucch_format3_param["modBPSK"] == 0:
                     for n in range(0, n_resource_block*self.N_sc_rb, 1):
                         eq_data_sym.append(eq_sym[n].real)
                         eq_data_sym.append(eq_sym[n].imag)
+                else:
+                    # Derotating pi/2 BPSK
+                    tot_re = n_resource_block*self.N_sc_rb
+                    sweep = [-(cmath.pi/2)*(x % 2)-(cmath.pi/4) for x in range(0, tot_re, 1)]
 
+                    derotat_vector = []
+                    for n in range(0, tot_re, 1):
+                        eq_sym[n]= eq_sym[n]*cmath.exp(complex(0, sweep[n]))
+                        eq_data_sym.append(eq_sym[n].real)
 
         # Decode  RM decoder
         if pucch_format3_param["cqi_bit_len"] <= 11:
             if pucch_format3_param["modBPSK"] == 0: # QPSK
-                E_tot = 24*n_data_sym*n_resource_block # Considering only the UCI case. Encoding shall ideally happen in MAC
+                e_tot = 24*n_data_sym*n_resource_block # Considering only the UCI case. Encoding shall ideally happen in MAC
             else: # Pi/2 BPSK
-                E_tot = 12*n_data_sym*n_resource_block
+                e_tot = 12*n_data_sym*n_resource_block
 
             # Descrambling
             cinit = pucch_format3_param["n_rnti"]*(2**15) + n_id
-            c_seq = 1-2*np.array(self.generate_c_sequence(cinit, E_tot))
+            c_seq = 1-2*np.array(self.generate_c_sequence(cinit, e_tot))
 
-            for n in range (0, E_tot, 1):
+            for n in range (0, e_tot, 1):
                 eq_data_sym[n] = eq_data_sym[n]*c_seq[n]
 
             c_len = 32 #For Reed Muller Short block encoder
-            for n in range(0,E_tot-c_len,1):
+            for n in range(0,e_tot-c_len,1):
                 index = n%c_len
                 eq_data_sym[index] = eq_data_sym[index] + eq_data_sym[n+c_len]
 
