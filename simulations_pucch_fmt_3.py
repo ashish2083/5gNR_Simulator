@@ -25,7 +25,7 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 5      # Frame to simulate
+nFrame = 500      # Frame to simulate
 
 nFrameGrid = []
 
