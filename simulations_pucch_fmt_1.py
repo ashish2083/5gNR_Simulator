@@ -25,7 +25,7 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 500      # Frame to simulate
+nFrame = 16000      # Frame to simulate
 
 nFrameGrid = []
 
@@ -48,7 +48,7 @@ nTxBits = np.random.randint(0, 2, nFrame*p2.pucch_format1_param["nHarqBit"])
 snr_sweep = []
 ber_sweep = []
 
-for snr_db in range(-4, 10, 1):
+for snr_db in range(-11, 2, 1):
     nRxBits = []
     print(snr_db)
     for frame in range(0, nFrame, 1):
@@ -92,11 +92,9 @@ for snr_db in range(-4, 10, 1):
         # Receiver
         harq_bit = p2.pucch_format_1_rec(rxVector, 0, 400, 0, p2.pucch_format1_param, noise_power)
 
-        if p2.pucch_format1_param["nHarqBit"] == 2:
-            nRxBits.append(harq_bit[0][1])
-            nRxBits.append(harq_bit[0][0])
-        else:
-            nRxBits.append(harq_bit[0])
+        harqBits = harq_bit[0].tolist()
+        harqBits.reverse()
+        nRxBits  = nRxBits + harqBits
 
     bit_error = np.sum(np.abs(nRxBits-nTxBits))/len(nTxBits)
     snr_sweep.append(snr_db)

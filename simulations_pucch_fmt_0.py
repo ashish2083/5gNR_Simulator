@@ -25,7 +25,7 @@ transition_time = [[1, 25600], [2, 13792]]  # In the multiple of Tc
 
 fft_size = 4096       # One symbol
 num_slot_sym = 14     # One slot
-nFrame = 500      # Frame to simulate
+nFrame = 16000      # Frame to simulate
 
 nFrameGrid = []
 
@@ -49,7 +49,7 @@ nTxBits = np.random.randint(0, 2, nFrame*p1.pucch_format0_param["nHarqBit"])
 snr_sweep = []
 ber_sweep = []
 
-for snr_db in range(-4, 10, 1):
+for snr_db in range(-4, 4, 1):
     nRxBits = []
     print(snr_db)
     for frame in range(0, nFrame, 1):
