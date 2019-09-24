@@ -89,6 +89,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                            "harqBit0": -1,
                            "harqBit1": -1,
                            "sr": -1,
+                           "sr_harq":-1,
                            "startPRB": -1,
                            "nHopPRB": -1
                            }
@@ -169,7 +170,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         m_o = pucch_format0_param["initialCyclicShift"]
         m_cs = 0
         if pucch_format0_param["nHarqBit"] == 1:
-            if pucch_format0_param["sr"] == 1:
+            if pucch_format0_param["sr"] == 1 and  pucch_format0_param["sr_harq"] == 1:
                 m_cs = self.mcs_one_bit_sr[pucch_format0_param["harqBit0"]]
             else:
                 m_cs = self.mcs_one_bit[pucch_format0_param["harqBit0"]]
@@ -177,7 +178,8 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         elif pucch_format0_param["nHarqBit"] == 2:
 
             index = pucch_format0_param["harqBit0"]+2*pucch_format0_param["harqBit1"]
-            if pucch_format0_param["sr"] == 1:
+
+            if pucch_format0_param["sr"] == 1 and pucch_format0_param["sr_harq"] == 1:
                 m_cs = self.mcs_two_bits_sr[index]
             else:
                 m_cs = self.mcs_two_bits[index]
@@ -576,13 +578,19 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
         if pucch_format0_param["nHarqBit"] == 1:
             corr_bit_0 = np.sum(rec_symbol)
             corr_bit_1 = np.sum(rec_symbol*expn(cmplx(0, -math.pi*np.r_[:12])))
+
             corr_bit_0_sr = np.sum(rec_symbol*expn(cmplx(0, -math.pi/2 *np.r_[:12])))
             corr_bit_1_sr = np.sum(rec_symbol*expn(cmplx(0, -3*math.pi/2 *np.r_[:12])))
 
-            dec_mat = [corr_bit_0.real,corr_bit_1,corr_bit_0_sr.real, corr_bit_1_sr.real]
+            if pucch_format0_param["sr_harq"] == 1:
+                dec_mat = [corr_bit_0.real,corr_bit_1,corr_bit_0_sr.real, corr_bit_1_sr.real]
+            else:
+                dec_mat = [corr_bit_0.real,corr_bit_1]
+
             harq_sr_dec = dec_mat.index(max(dec_mat))
 
             sig_power = 0
+
             harq_bit  = np.array(0)
             if harq_sr_dec == 0:
                 harq_bit = np.array(0)
@@ -610,18 +618,19 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                 dtx = 1
 
         elif pucch_format0_param["nHarqBit"] == 2:
+
             corr_bit_0_0 = np.sum(rec_symbol*expn(cmplx(0, -math.pi/6 *np.r_[:12])))
             corr_bit_0_1 = np.sum(rec_symbol*expn(cmplx(0, -4*math.pi/6 *np.r_[:12])))
             corr_bit_1_0 = np.sum(rec_symbol*expn(cmplx(0, -7*math.pi/6 *np.r_[:12])))
             corr_bit_1_1 = np.sum(rec_symbol*expn(cmplx(0, -10*math.pi/6 *np.r_[:12])))
 
-            # Decision Matrix Without SR
+            # Decision Matrix With SR
             dec_mat_sr = [corr_bit_0_0.real, corr_bit_0_1.real, corr_bit_1_0.real, corr_bit_1_1.real]
             dec_mat_sr_raw = [corr_bit_0_0, corr_bit_0_1, corr_bit_1_0, corr_bit_1_1]
 
             harq_bit_dec_sr = dec_mat_sr.index(max((dec_mat_sr)))
 
-            # Decision Matrix With SR
+            # Decision Matrix Without SR
             corr_bit_0_0 = np.sum(rec_symbol)
             corr_bit_0_1 = np.sum(rec_symbol*expn(cmplx(0, -math.pi/2 *np.r_[:12])))
             corr_bit_1_0 = np.sum(rec_symbol*expn(cmplx(0, -3*math.pi/2 *np.r_[:12])))
@@ -632,7 +641,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
             harq_bit_dec = dec_mat.index(max((dec_mat)))
 
-            if dec_mat_sr[harq_bit_dec_sr] >= dec_mat[harq_bit_dec]:
+            if (dec_mat_sr[harq_bit_dec_sr] >= dec_mat[harq_bit_dec]) and pucch_format0_param["sr_harq"] == 1:
                 sr = 1
                 dec_mat = dec_mat_sr
                 dec_mat_raw = dec_mat_sr_raw
@@ -655,6 +664,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             if harq_bit_dec == 3:
                 harq_bit = np.array([1, 1])
                 sig_power = np.absolute(dec_mat_raw[3]) ** 2
+
 
             if sig_power > noise_power:
                 dtx = 0
