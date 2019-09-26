@@ -583,9 +583,9 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             corr_bit_1_sr = np.sum(rec_symbol*expn(cmplx(0, -3*math.pi/2 *np.r_[:12])))
 
             if pucch_format0_param["sr_harq"] == 1:
-                dec_mat = [corr_bit_0.real,corr_bit_1,corr_bit_0_sr.real, corr_bit_1_sr.real]
+                dec_mat = [corr_bit_0.real,corr_bit_1.real,corr_bit_0_sr.real, corr_bit_1_sr.real]
             else:
-                dec_mat = [corr_bit_0.real,corr_bit_1]
+                dec_mat = [corr_bit_0.real,corr_bit_1.real]
 
             harq_sr_dec = dec_mat.index(max(dec_mat))
 
@@ -633,12 +633,12 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             # Decision Matrix Without SR
             corr_bit_0_0 = np.sum(rec_symbol)
             corr_bit_0_1 = np.sum(rec_symbol*expn(cmplx(0, -math.pi/2 *np.r_[:12])))
-            corr_bit_1_0 = np.sum(rec_symbol*expn(cmplx(0, -3*math.pi/2 *np.r_[:12])))
+            corr_bit_1_0 = np.sum(rec_symbol*expn(cmplx(0,  math.pi/2 *np.r_[:12])))
             corr_bit_1_1 = np.sum(rec_symbol*expn(cmplx(0, -math.pi*np.r_[:12])))
 
             dec_mat = [corr_bit_0_0.real, corr_bit_0_1.real, corr_bit_1_0.real, corr_bit_1_1.real]
             dec_mat_raw = [corr_bit_0_0, corr_bit_0_1, corr_bit_1_0, corr_bit_1_1]
-
+            
             harq_bit_dec = dec_mat.index(max((dec_mat)))
 
             if (dec_mat_sr[harq_bit_dec_sr] >= dec_mat[harq_bit_dec]) and pucch_format0_param["sr_harq"] == 1:
@@ -672,7 +672,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
                 dtx = 1
         else:
             if pucch_format0_param["sr"] == 1:
-                corr_bit = np.sum(rec_symbol)
+                corr_bit  = np.sum(rec_symbol)
                 sig_power = np.absolute(corr_bit) ** 2
                 if sig_power > noise_power:
                     dtx = 0
