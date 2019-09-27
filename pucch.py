@@ -186,10 +186,9 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
         else:
             if pucch_format0_param["sr"] == 1:
-                if pucch_format0_param["sr"] == 1:
-                    m_cs = 0
-                else:
-                    print("PUCCH / pucch_format_0: Invalid format")
+                m_cs = 0
+            else:
+                print("PUCCH / pucch_format_0: Invalid format")
 
         if pucch_format0_param["nrOfSymbols"] == 1:
             [u, v] = self.generate_u_v(pucch_format0_param["pucchGroupHopping"], pucch_format0_param["pucchFrequencyHopping"], n_id, n_sf_u, n_hop)
@@ -628,7 +627,7 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
             dec_mat_sr = [corr_bit_0_0.real, corr_bit_0_1.real, corr_bit_1_0.real, corr_bit_1_1.real]
             dec_mat_sr_raw = [corr_bit_0_0, corr_bit_0_1, corr_bit_1_0, corr_bit_1_1]
 
-            harq_bit_dec_sr = dec_mat_sr.index(max((dec_mat_sr)))
+            harq_bit_dec_sr = dec_mat_sr.index(max(dec_mat_sr))
 
             # Decision Matrix Without SR
             corr_bit_0_0 = np.sum(rec_symbol)
@@ -638,8 +637,8 @@ class pucch(referenceSignal.ReferenceSignal, cSequence.CSequence, encoder.encode
 
             dec_mat = [corr_bit_0_0.real, corr_bit_0_1.real, corr_bit_1_0.real, corr_bit_1_1.real]
             dec_mat_raw = [corr_bit_0_0, corr_bit_0_1, corr_bit_1_0, corr_bit_1_1]
-            
-            harq_bit_dec = dec_mat.index(max((dec_mat)))
+
+            harq_bit_dec = dec_mat.index(max(dec_mat))
 
             if (dec_mat_sr[harq_bit_dec_sr] >= dec_mat[harq_bit_dec]) and pucch_format0_param["sr_harq"] == 1:
                 sr = 1
